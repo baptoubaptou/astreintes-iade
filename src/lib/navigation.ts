@@ -10,12 +10,14 @@ export const sharedNavItems: NavItem[] = [
   { href: "/planning", label: "Planning collectif" },
   { href: "/points", label: "Points" },
   { href: "/app/bourse", label: "Bourse aux astreintes" },
+  { href: "/app/mon-compte", label: "Mon compte" },
 ];
 
 /** Entrées visibles pour le cadre (hors sous-menus). */
 export const cadrePersonalNavItems: NavItem[] = [
   { href: "/points", label: "Points" },
   { href: "/app/bourse", label: "Bourse aux astreintes" },
+  { href: "/app/mon-compte", label: "Mon compte" },
 ];
 
 export const planningNavChildren: NavItem[] = [
@@ -34,9 +36,9 @@ export const parametresNavChildren: NavItem[] = [
   { href: "/app/utilisateurs", label: "Gestion des utilisateurs" },
   { href: "/admin/qualifications", label: "Qualifications" },
   { href: "/admin/lignes", label: "Lignes d'astreinte" },
-  { href: "/admin/poids-creneaux", label: "Poids par créneau" },
-  { href: "/admin/bonus-continuite", label: "Bonus de continuité" },
+  { href: "/admin/points-creneaux", label: "Points par créneau" },
   { href: "/admin/parametres-algorithme", label: "Algorithme d'attribution" },
+  { href: "/admin/envoi-automatique", label: "Envoi automatique" },
   { href: "/admin/jours-feries", label: "Gestion des jours fériés" },
   { href: "/admin/journal", label: "Journal d'audit" },
 ];

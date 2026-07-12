@@ -288,8 +288,12 @@ export function GenerationAutomatiquePanel({
             <h2 className="text-lg font-medium">Étape 2 — Aperçu</h2>
             <p className="mt-1 text-sm text-zinc-600">
               Période simulée : {simulation.periode.dateDebut} →{" "}
-              {simulation.periode.dateFin} · {simulation.resume.pourvues} créneaux
-              proposés · {simulation.resume.dejaPlanifiees} déjà planifiés ·{" "}
+              {simulation.periode.dateFin}
+              {simulation.modeAttribution === "LISSE"
+                ? " · mode lissé"
+                : " · mode glouton"}{" "}
+              · {simulation.resume.pourvues} créneaux proposés ·{" "}
+              {simulation.resume.dejaPlanifiees} déjà planifiés ·{" "}
               {simulation.resume.nonPourvues} non pourvus
               {simulation.resume.tiragesAuSort > 0
                 ? ` · ${simulation.resume.tiragesAuSort} tirage(s) au sort`
@@ -354,6 +358,41 @@ export function GenerationAutomatiquePanel({
           </span>
         </div>
       </section>
+
+      {simulation.modeAttribution === "LISSE" ? (
+        <section className="rounded border border-amber-200 bg-amber-50/50 p-6">
+          <h3 className="text-lg font-medium">
+            Ajustements par rapport au résultat de base
+          </h3>
+          <p className="mt-1 text-sm text-zinc-600">
+            Le mode lissé part du résultat glouton, puis applique des échanges
+            pour équilibrer la répartition des points.
+          </p>
+          {simulation.ajustementsLisse &&
+          simulation.ajustementsLisse.length > 0 ? (
+            <ul className="mt-4 space-y-2 text-sm">
+              {simulation.ajustementsLisse.map((ajustement, index) => (
+                <li
+                  key={`${ajustement.type}-${index}`}
+                  className={
+                    ajustement.type === "bloc_casse"
+                      ? "font-medium text-amber-900"
+                      : "text-zinc-800"
+                  }
+                >
+                  {ajustement.type === "bloc_casse" ? "⚠ " : "• "}
+                  {ajustement.message}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-4 text-sm text-zinc-600">
+              Aucun ajustement : le résultat glouton était déjà optimal pour le
+              mode lissé sur cette période.
+            </p>
+          )}
+        </section>
+      ) : null}
 
       <section className="overflow-x-auto rounded border border-zinc-200">
         <table className="min-w-full text-sm">

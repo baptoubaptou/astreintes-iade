@@ -1,5 +1,12 @@
-import { StatutAstreinte, TypeCreneau } from "@prisma/client";
+import {
+  ModeAttribution,
+  StatutAstreinte,
+  TypeActionAudit,
+  TypeCreneau,
+} from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { formaterAjustementsLisse } from "@/lib/ajustements-lisse-affichage";
+import type { AjustementLisseAffichage } from "@/lib/ajustements-lisse-affichage";
 import {
   genererPlanningAutomatique,
   resumerPropositions,
@@ -13,7 +20,6 @@ import {
   type PointsProjectesIade,
 } from "@/server/points";
 import { journaliser } from "@/server/audit";
-import { TypeActionAudit } from "@prisma/client";
 
 export type PointsSimulesIade = PointsProjectesIade;
 
@@ -25,6 +31,8 @@ export type SimulationPlanningResult = {
   lignes: Array<{ id: string; nom: string }>;
   pointsApresSimulation: PointsSimulesIade[];
   typesJourParDate: Record<string, TypeJour>;
+  modeAttribution: ModeAttribution;
+  ajustementsLisse?: AjustementLisseAffichage[];
 };
 
 export type ValidationSimulationError = {
@@ -202,7 +210,8 @@ export async function executerSimulationPlanning(
 ): Promise<SimulationPlanningResult> {
   const debut = normalizeUtcDay(dateDebut);
   const fin = normalizeUtcDay(dateFin);
-  const propositions = await genererPlanningAutomatique(debut, fin);
+  const resultat = await genererPlanningAutomatique(debut, fin);
+  const propositions = resultat.propositions;
   const annees = collectAnneesPeriode(debut, fin);
   const joursPeriode: Date[] = [];
   const cursor = new Date(debut);
@@ -236,6 +245,11 @@ export async function executerSimulationPlanning(
     lignes,
     pointsApresSimulation,
     typesJourParDate,
+    modeAttribution: resultat.modeAttribution,
+    ajustementsLisse:
+      resultat.modeAttribution === ModeAttribution.LISSE
+        ? formaterAjustementsLisse(resultat.ajustementsLisse)
+        : undefined,
   };
 }
 

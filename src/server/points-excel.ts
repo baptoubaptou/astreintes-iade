@@ -21,7 +21,9 @@ function ajusterLargeursColonnes(worksheet: ExcelJS.Worksheet): void {
 export async function genererPointsExcel(
   annee: number,
 ): Promise<{ buffer: Buffer; filename: string }> {
-  const overview = await getPointsOverview(annee);
+  const overview = await getPointsOverview(annee, {
+    visibilite: "publiees_seulement",
+  });
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Astreintes IADE";
   workbook.created = new Date();

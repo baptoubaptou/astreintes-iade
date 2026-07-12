@@ -1,38 +1,38 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcrypt";
 import { authConfig } from "@/auth.config";
-import { prisma } from "@/lib/db";
+import { findUtilisateurByIdentifiant } from "@/server/auth-identifiant";
+import { verifierMotDePasse } from "@/server/mot-de-passe";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
       credentials: {
-        email: { label: "Email", type: "email" },
+        identifiant: { label: "Email ou matricule", type: "text" },
         password: { label: "Mot de passe", type: "password" },
       },
       async authorize(credentials) {
-        const email =
-          typeof credentials?.email === "string" ? credentials.email : null;
+        const identifiant =
+          typeof credentials?.identifiant === "string"
+            ? credentials.identifiant
+            : null;
         const password =
           typeof credentials?.password === "string"
             ? credentials.password
             : null;
 
-        if (!email || !password) {
+        if (!identifiant || !password) {
           return null;
         }
 
-        const utilisateur = await prisma.utilisateur.findUnique({
-          where: { email },
-        });
+        const utilisateur = await findUtilisateurByIdentifiant(identifiant);
 
         if (!utilisateur || !utilisateur.actif) {
           return null;
         }
 
-        const motDePasseValide = await bcrypt.compare(
+        const motDePasseValide = await verifierMotDePasse(
           password,
           utilisateur.motDePasseHash,
         );

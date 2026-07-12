@@ -34,6 +34,7 @@ export default async function AdminJoursFeriesPage({
 
       <Suspense fallback={<p className="text-sm">Chargement...</p>}>
         <AdminJoursFeriesPanel
+          key={annee}
           annee={annee}
           anneeCourante={anneeCourante}
           anneeSuivante={anneeSuivante}

@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { ModeAttribution } from "@prisma/client";
 import { assertCadreApi } from "@/server/assert-cadre-api";
 import {
+  ensureParametreLisseSeuilEcartAberrant,
   getModeAttribution,
+  listSeuilsEcartAberrantParLigne,
   setModeAttribution,
+  upsertSeuilEcartAberrantLigne,
+  validateUpsertSeuilEcartAberrantInput,
 } from "@/server/parametre-algorithme";
 
 export async function GET() {
@@ -12,8 +16,14 @@ export async function GET() {
     return auth.response;
   }
 
-  const mode = await getModeAttribution();
-  return NextResponse.json({ mode });
+  await ensureParametreLisseSeuilEcartAberrant();
+
+  const [mode, seuilsEcartAberrant] = await Promise.all([
+    getModeAttribution(),
+    listSeuilsEcartAberrantParLigne(),
+  ]);
+
+  return NextResponse.json({ mode, seuilsEcartAberrant });
 }
 
 export async function PATCH(request: Request) {
@@ -28,6 +38,24 @@ export async function PATCH(request: Request) {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Corps JSON invalide." }, { status: 400 });
+  }
+
+  if (body.seuilEcartAberrant !== undefined) {
+    const validated = validateUpsertSeuilEcartAberrantInput(
+      body.seuilEcartAberrant as Record<string, unknown>,
+    );
+
+    if ("error" in validated) {
+      return NextResponse.json({ error: validated.error }, { status: 400 });
+    }
+
+    const result = await upsertSeuilEcartAberrantLigne(validated);
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    const seuilsEcartAberrant = await listSeuilsEcartAberrantParLigne();
+    return NextResponse.json({ seuilsEcartAberrant });
   }
 
   const mode =

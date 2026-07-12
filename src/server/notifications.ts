@@ -1,5 +1,6 @@
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { emailResendConfigure, envoyerEmailResend } from "@/server/resend-email";
 
 export type NotificationEmailPayload = {
   to: string;
@@ -46,10 +47,25 @@ export async function notifierPlusieurs(
 
 async function envoyerEmailNotification(
   payload: NotificationEmailPayload,
+  idempotencyKey?: string,
 ): Promise<void> {
-  if (process.env.NODE_ENV !== "production") {
+  if (!emailResendConfigure()) {
     console.info(
       `[email] À: ${payload.to} | ${payload.subject} | ${payload.body}`,
+    );
+    return;
+  }
+
+  const result = await envoyerEmailResend({
+    to: payload.to,
+    subject: payload.subject,
+    body: payload.body,
+    idempotencyKey,
+  });
+
+  if (!result.ok) {
+    console.error(
+      `[email] Échec Resend pour ${payload.to} : ${result.error}`,
     );
   }
 }

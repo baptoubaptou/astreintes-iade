@@ -27,7 +27,7 @@ export default async function PointsPage({ searchParams }: PointsPageProps) {
           <p className="mt-1 text-sm text-zinc-600">
             Vue transparente des points par IADE pour l&apos;année civile
             sélectionnée (tous types de créneau). Tri par défaut : points
-            croissants. Le détail par créneau s&apos;affiche lorsque plusieurs
+            décroissants. Le détail par créneau s&apos;affiche lorsque plusieurs
             types sont présents sur une ligne.
           </p>
         </div>

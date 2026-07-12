@@ -13,7 +13,10 @@
     "db:studio": "prisma studio",
     "test:algo": "tsx scripts/test-algorithme-affectation.ts",
     "test:bourse-fenetres": "tsx scripts/test-bourse-fenetres.ts",
-    "test:bourse-notifications": "tsx scripts/test-bourse-notifications.ts"
+    "test:bourse-notifications": "tsx scripts/test-bourse-notifications.ts",
+    "test:algo-lisse": "tsx scripts/test-algorithme-lisse.ts",
+    "cron:quotidien": "tsx scripts/cron-taches-quotidiennes.ts",
+    "seed:dispos-juillet-aout": "tsx scripts/seed-disponibilites-juillet-aout.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -26,7 +29,8 @@
     "next-auth": "^5.0.0-beta.31",
     "pdfkit": "^0.19.1",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "resend": "^6.17.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

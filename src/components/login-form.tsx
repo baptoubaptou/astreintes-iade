@@ -1,11 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { loginAction, type LoginState } from "@/app/login/actions";
+import {
+  authButtonClassName,
+  authInputClassName,
+  authLabelClassName,
+} from "@/components/auth/auth-card";
 
 const initialState: LoginState = {};
 
-export function LoginForm() {
+type LoginFormProps = {
+  callbackUrl?: string;
+};
+
+export function LoginForm({ callbackUrl }: LoginFormProps) {
   const [state, formAction, isPending] = useActionState(
     loginAction,
     initialState,
@@ -13,29 +23,27 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="space-y-4">
+      {callbackUrl ? (
+        <input type="hidden" name="callbackUrl" value={callbackUrl} />
+      ) : null}
+
       <div>
-        <label
-          htmlFor="email"
-          className="mb-1 block text-sm font-medium text-foreground"
-        >
-          Email
+        <label htmlFor="identifiant" className={authLabelClassName}>
+          E-mail ou matricule
         </label>
         <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
+          id="identifiant"
+          name="identifiant"
+          type="text"
+          autoComplete="username"
           required
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
-          placeholder="cadre@test.local"
+          className={authInputClassName}
+          placeholder="ex. baptistemiceli@gmail.com ou 123456"
         />
       </div>
 
       <div>
-        <label
-          htmlFor="password"
-          className="mb-1 block text-sm font-medium text-foreground"
-        >
+        <label htmlFor="password" className={authLabelClassName}>
           Mot de passe
         </label>
         <input
@@ -44,7 +52,7 @@ export function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
-          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-foreground outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-900"
+          className={authInputClassName}
         />
       </div>
 
@@ -57,10 +65,25 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        className={authButtonClassName}
       >
         {isPending ? "Connexion..." : "Se connecter"}
       </button>
+
+      <div className="flex flex-col gap-2 pt-2 text-center text-sm">
+        <Link
+          href="/premiere-connexion"
+          className="text-zinc-600 underline-offset-4 hover:text-foreground hover:underline dark:text-zinc-400"
+        >
+          Première connexion
+        </Link>
+        <Link
+          href="/mot-de-passe-oublie"
+          className="text-zinc-600 underline-offset-4 hover:text-foreground hover:underline dark:text-zinc-400"
+        >
+          Mot de passe oublié
+        </Link>
+      </div>
     </form>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
+import { Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { PointsOverview } from "@/server/points";
+import type { PointsIadeRow, PointsOverview } from "@/server/points";
 import {
   formatCreneauDetail,
   formatLigneCell,
@@ -51,7 +52,89 @@ type PointsTableProps = {
   currentUserId?: string;
 };
 
+function calculerMoyennePoints(iades: PointsIadeRow[]): number {
+  if (iades.length === 0) {
+    return 0;
+  }
+
+  const total = iades.reduce((sum, iade) => sum + iade.pointsTotal, 0);
+  return total / iades.length;
+}
+
+function formatMoyenne(moyenne: number): string {
+  return Number.isInteger(moyenne) ? String(moyenne) : moyenne.toFixed(1);
+}
+
+function doitAfficherSeparateurMoyenne(
+  index: number,
+  iades: PointsIadeRow[],
+  moyenne: number,
+): boolean {
+  const suivant = iades[index + 1];
+  if (!suivant) {
+    return false;
+  }
+
+  return iades[index].pointsTotal >= moyenne && suivant.pointsTotal < moyenne;
+}
+
+function IadeRow({
+  iade,
+  isCurrentUser,
+}: {
+  iade: PointsIadeRow;
+  isCurrentUser: boolean;
+}) {
+  return (
+    <tr className={isCurrentUser ? "bg-amber-50" : undefined}>
+      <td className="px-4 py-2">
+        <span className="font-medium">
+          {iade.prenom} {iade.nom}
+        </span>
+        {isCurrentUser ? (
+          <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs text-amber-900">
+            Vous
+          </span>
+        ) : null}
+      </td>
+      <td className="px-4 py-2 font-medium">{iade.pointsTotal}</td>
+      {iade.parLigne.map((ligne) => (
+        <td key={ligne.ligneId} className="px-4 py-2 text-zinc-700">
+          <div>{formatLigneCell(ligne.astreintes, ligne.points)}</div>
+          {shouldShowCreneauDetail(ligne) ? (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {formatCreneauDetail(ligne)}
+            </p>
+          ) : null}
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+function SeparateurMoyenneRow({
+  colonnes,
+  moyenne,
+}: {
+  colonnes: number;
+  moyenne: number;
+}) {
+  return (
+    <tr className="bg-zinc-50">
+      <td
+        colSpan={colonnes}
+        className="border-y-2 border-zinc-400 px-4 py-2 text-center text-xs font-medium text-red-600"
+      >
+        Moyenne : {formatMoyenne(moyenne)} points
+      </td>
+    </tr>
+  );
+}
+
 export function PointsTable({ overview, currentUserId }: PointsTableProps) {
+  const moyenne = calculerMoyennePoints(overview.iades);
+  const colonnes = 2 + overview.lignes.length;
+
   return (
     <div className="overflow-x-auto rounded border border-zinc-200">
       <table className="min-w-full text-sm">
@@ -67,36 +150,21 @@ export function PointsTable({ overview, currentUserId }: PointsTableProps) {
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-200">
-          {overview.iades.map((iade) => {
+          {overview.iades.map((iade, index) => {
             const isCurrentUser = currentUserId === iade.iadeId;
+            const afficherSeparateur = doitAfficherSeparateurMoyenne(
+              index,
+              overview.iades,
+              moyenne,
+            );
 
             return (
-              <tr
-                key={iade.iadeId}
-                className={isCurrentUser ? "bg-amber-50" : undefined}
-              >
-                <td className="px-4 py-2">
-                  <span className="font-medium">
-                    {iade.prenom} {iade.nom}
-                  </span>
-                  {isCurrentUser ? (
-                    <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 text-xs text-amber-900">
-                      Vous
-                    </span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-2 font-medium">{iade.pointsTotal}</td>
-                {iade.parLigne.map((ligne) => (
-                  <td key={ligne.ligneId} className="px-4 py-2 text-zinc-700">
-                    <div>{formatLigneCell(ligne.astreintes, ligne.points)}</div>
-                    {shouldShowCreneauDetail(ligne) ? (
-                      <p className="mt-0.5 text-xs text-zinc-500">
-                        {formatCreneauDetail(ligne)}
-                      </p>
-                    ) : null}
-                  </td>
-                ))}
-              </tr>
+              <Fragment key={iade.iadeId}>
+                <IadeRow iade={iade} isCurrentUser={isCurrentUser} />
+                {afficherSeparateur ? (
+                  <SeparateurMoyenneRow colonnes={colonnes} moyenne={moyenne} />
+                ) : null}
+              </Fragment>
             );
           })}
         </tbody>

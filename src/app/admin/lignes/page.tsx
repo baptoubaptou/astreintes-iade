@@ -12,10 +12,10 @@ export default async function AdminLignesPage() {
       <div>
         <h1 className="text-2xl font-semibold">Lignes d&apos;astreinte</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Gérer les lignes et leur ordre de priorité. Les poids par créneau se
+          Gérer les lignes et leur ordre de priorité. Les points par créneau se
           configurent sur{" "}
-          <a href="/admin/poids-creneaux" className="underline">
-            Poids par créneau
+          <a href="/admin/points-creneaux" className="underline">
+            Points par créneau
           </a>
           . La désactivation préserve l&apos;historique des astreintes liées.
         </p>

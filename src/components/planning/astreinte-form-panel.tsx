@@ -402,7 +402,7 @@ export function AstreinteFormPanel({
                 </select>
               )}
               <p className="mt-1 text-xs text-zinc-500">
-                {creneauSemaine.poids} pt — PoidsCreneau (
+                {creneauSemaine.poids} pt — points par créneau (
                 {creneauSemaine.typeCreneau})
               </p>
               <FieldError field="iadeId" error={state.error} />
@@ -515,7 +515,7 @@ export function AstreinteFormPanel({
                 : pointsPreviewCreate ?? "—"}
             </p>
             <p className="mt-1 text-xs text-zinc-500">
-              Calculé depuis PoidsCreneau (ligne × type de créneau exact)
+              Calculé depuis les points par créneau (ligne × type de créneau exact)
             </p>
           </div>
 

@@ -129,7 +129,9 @@ function addFooters(
 export async function genererPointsPdf(
   annee: number,
 ): Promise<{ buffer: Buffer; filename: string }> {
-  const overview = await getPointsOverview(annee);
+  const overview = await getPointsOverview(annee, {
+    visibilite: "publiees_seulement",
+  });
   const generatedAt = new Date();
 
   const buffer = await new Promise<Buffer>((resolve, reject) => {

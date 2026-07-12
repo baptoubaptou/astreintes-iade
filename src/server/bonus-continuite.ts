@@ -92,14 +92,14 @@ export async function getBonusContinuiteMatrix(): Promise<BonusContinuiteLigne[]
   });
 }
 
-function paireJourNuit(types: TypeCreneau[]): boolean {
+export function paireJourNuit(types: TypeCreneau[]): boolean {
   return (
     types.some((type) => estCreneauJour(type)) &&
     types.some((type) => estCreneauNuit(type) && type !== TypeCreneau.NUIT_SEMAINE)
   );
 }
 
-function typesWeekend48h(): TypeCreneau[] {
+export function typesWeekend48h(): TypeCreneau[] {
   return [
     TypeCreneau.JOUR_SAMEDI,
     TypeCreneau.NUIT_SAMEDI,
@@ -108,7 +108,7 @@ function typesWeekend48h(): TypeCreneau[] {
   ];
 }
 
-function aWeekend48hComplet(types: TypeCreneau[]): boolean {
+export function aWeekend48hComplet(types: TypeCreneau[]): boolean {
   const attendus = typesWeekend48h();
   return attendus.every((type) => types.includes(type));
 }

@@ -19,10 +19,11 @@ import {
   calculerPointsCumulesAvecPropositions,
   calculerPointsCumulesTousIades,
 } from "@/server/points";
+import { getModeAttribution } from "@/server/parametre-algorithme";
 import {
-  ERREUR_MODE_LISSE_NON_IMPLEMENTE,
-  getModeAttribution,
-} from "@/server/parametre-algorithme";
+  reoptimiserParEchanges,
+  type JournalReoptimisationLisse,
+} from "@/server/algorithme-lisse";
 
 export type PropositionAffectation = {
   date: string;
@@ -35,6 +36,12 @@ export type PropositionAffectation = {
   nonPourvu?: boolean;
   dejaPlanifie?: boolean;
   tirageAuSort?: boolean;
+};
+
+export type ResultatGenererPlanningAutomatique = {
+  propositions: PropositionAffectation[];
+  modeAttribution: ModeAttribution;
+  ajustementsLisse?: JournalReoptimisationLisse;
 };
 
 type IadeCandidate = {
@@ -767,7 +774,7 @@ async function traiterJour(
   await traiterCreneauxIndependants(ctx, jour, ligne, creneaux);
 }
 
-export async function genererPlanningAutomatique(
+async function genererPlanningGlouton(
   dateDebut: Date,
   dateFin: Date,
 ): Promise<PropositionAffectation[]> {
@@ -776,11 +783,6 @@ export async function genererPlanningAutomatique(
 
   if (fin < debut) {
     throw new Error("dateFin doit être postérieure ou égale à dateDebut.");
-  }
-
-  const modeAttribution = await getModeAttribution();
-  if (modeAttribution === ModeAttribution.LISSE) {
-    throw new Error(ERREUR_MODE_LISSE_NON_IMPLEMENTE);
   }
 
   const jours = eachDayInclusive(debut, fin);
@@ -952,6 +954,36 @@ export async function genererPlanningAutomatique(
 
     return a.typeCreneau.localeCompare(b.typeCreneau);
   });
+}
+
+export async function genererPlanningAutomatique(
+  dateDebut: Date,
+  dateFin: Date,
+): Promise<ResultatGenererPlanningAutomatique> {
+  const modeAttribution = await getModeAttribution();
+  const propositionsGlouton = await genererPlanningGlouton(dateDebut, dateFin);
+
+  if (modeAttribution !== ModeAttribution.LISSE) {
+    return {
+      propositions: propositionsGlouton,
+      modeAttribution,
+    };
+  }
+
+  const debut = normalizeUtcDay(dateDebut);
+  const pointsDepart = await calculerPointsCumulesTousIades(
+    debut.getUTCFullYear(),
+  );
+  const reoptimise = await reoptimiserParEchanges(
+    propositionsGlouton,
+    pointsDepart,
+  );
+
+  return {
+    propositions: reoptimise.propositions,
+    modeAttribution,
+    ajustementsLisse: reoptimise.journal,
+  };
 }
 
 /** Résumé utile pour les scripts de test manuel. */

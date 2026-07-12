@@ -57,7 +57,7 @@ export function AdminPoidsCreneauxPanel({
     const valeurActuelle = ligne.poids[typeCreneau].valeur;
 
     if (rawValue === "" || !Number.isInteger(parsed) || parsed < 0) {
-      setError("Le poids doit être un entier positif ou nul.");
+      setError("Les points doivent être un entier positif ou nul.");
       setDrafts((current) => ({
         ...current,
         [key]: String(valeurActuelle),
@@ -204,7 +204,7 @@ export function AdminPoidsCreneauxPanel({
                             }
                           }}
                           className="w-20 rounded border border-zinc-300 px-2 py-1 text-sm disabled:opacity-50"
-                          aria-label={`Poids ${LIBELLES_TYPE_CRENEAU[type]} — ${ligne.ligneNom}`}
+                          aria-label={`Points ${LIBELLES_TYPE_CRENEAU[type]} — ${ligne.ligneNom}`}
                         />
                         {isSaving ? (
                           <span className="text-xs text-zinc-500">…</span>

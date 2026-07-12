@@ -5,13 +5,26 @@ import { isCadreOnlyRoute } from "@/lib/navigation";
 
 const { auth } = NextAuth(authConfig);
 
+const publicAuthRoutes = [
+  "/login",
+  "/premiere-connexion",
+  "/mot-de-passe-oublie",
+  "/reinitialiser-mot-de-passe",
+] as const;
+
+function isPublicAuthRoute(pathname: string): boolean {
+  return publicAuthRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+}
+
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth?.user;
   const role = req.auth?.user?.role;
 
-  if (pathname.startsWith("/login")) {
-    if (isLoggedIn) {
+  if (isPublicAuthRoute(pathname)) {
+    if (isLoggedIn && pathname.startsWith("/login")) {
       return Response.redirect(new URL("/app", req.nextUrl));
     }
     return;
@@ -81,6 +94,9 @@ export default auth((req) => {
 export const config = {
   matcher: [
     "/login",
+    "/premiere-connexion",
+    "/mot-de-passe-oublie",
+    "/reinitialiser-mot-de-passe",
     "/app/:path*",
     "/planning",
     "/mes-astreintes",

@@ -1,5 +1,6 @@
 import { Role, StatutAstreinte, TypeBonusContinuite, TypeCreneau } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import type { AstreinteVisibilite } from "@/server/astreintes";
 import { getPoidsCreneau } from "@/server/astreinte-creneaux";
 import {
   calculerBonusContinuitePourIade,
@@ -101,7 +102,7 @@ function isPropositionComptabilisee(proposition: PropositionPointsInput): boolea
   );
 }
 
-type AstreintePointsRow = AstreintePourBonusContinuite & {
+export type AstreintePointsRow = AstreintePourBonusContinuite & {
   iadeId: string;
   pointsAttribues: number;
 };
@@ -120,7 +121,7 @@ function sommerPointsAttribues(
   return astreintes.reduce((total, astreinte) => total + astreinte.pointsAttribues, 0);
 }
 
-function calculerTotalPointsDepuisAstreintes(
+export function calculerTotalPointsDepuisAstreintes(
   astreintes: AstreintePointsRow[],
   bonusParLigne: Map<string, Record<TypeBonusContinuite, number>>,
 ): number {
@@ -130,7 +131,7 @@ function calculerTotalPointsDepuisAstreintes(
   );
 }
 
-function propositionsVersAstreintesVirtuelles(
+export function propositionsVersAstreintesVirtuelles(
   propositions: PropositionPointsInput[],
   annee: number,
   iadeId?: string,
@@ -162,13 +163,25 @@ function propositionsVersAstreintesVirtuelles(
   return virtuelles;
 }
 
-function filtreAstreintesActivesIades(annee: number) {
+export type PointsOverviewOptions = {
+  visibilite?: AstreinteVisibilite;
+};
+
+function filtreVisibilitePoints(visibilite: AstreinteVisibilite = "toutes") {
+  return visibilite === "publiees_seulement" ? { publie: true } : {};
+}
+
+function filtreAstreintesActivesIades(
+  annee: number,
+  visibilite: AstreinteVisibilite = "toutes",
+) {
   const { start, end } = getCivilYearRange(annee);
 
   return {
     date: { gte: start, lt: end },
     statut: { not: StatutAstreinte.ANNULEE },
     iade: { role: Role.IADE, actif: true },
+    ...filtreVisibilitePoints(visibilite),
   } as const;
 }
 
@@ -242,6 +255,86 @@ export async function projecterPointsApresPropositions(
     });
 }
 
+export function propositionComptabilisee(
+  proposition: PropositionPointsInput,
+): boolean {
+  return isPropositionComptabilisee(proposition);
+}
+
+export function calculerPointsFinauxDepuisContexte(
+  propositions: PropositionPointsInput[],
+  pointsDepart: Map<string, number>,
+  astreintesExistantesParIade: Map<string, AstreintePointsRow[]>,
+  bonusParLigne: Map<string, Record<TypeBonusContinuite, number>>,
+): Map<string, number> {
+  const annees = new Set<number>();
+  for (const proposition of propositions) {
+    const annee = anneeFromDateString(proposition.date);
+    if (annee) {
+      annees.add(annee);
+    }
+  }
+
+  const virtuellesParIade = new Map<string, AstreintePointsRow[]>();
+  for (const annee of annees) {
+    for (const astreinte of propositionsVersAstreintesVirtuelles(propositions, annee)) {
+      const liste = virtuellesParIade.get(astreinte.iadeId) ?? [];
+      liste.push(astreinte);
+      virtuellesParIade.set(astreinte.iadeId, liste);
+    }
+  }
+
+  const iadeIds = new Set<string>([
+    ...pointsDepart.keys(),
+    ...virtuellesParIade.keys(),
+  ]);
+
+  const resultat = new Map<string, number>();
+
+  for (const iadeId of iadeIds) {
+    const existantes = astreintesExistantesParIade.get(iadeId) ?? [];
+    const nouvelles = virtuellesParIade.get(iadeId) ?? [];
+    resultat.set(
+      iadeId,
+      calculerTotalPointsDepuisAstreintes(
+        [...existantes, ...nouvelles],
+        bonusParLigne,
+      ),
+    );
+  }
+
+  return resultat;
+}
+
+export async function chargerAstreintesPointsParIade(
+  annee: number,
+  iadeIds: Iterable<string>,
+): Promise<Map<string, AstreintePointsRow[]>> {
+  const ids = [...iadeIds];
+  const astreintes = await prisma.astreinte.findMany({
+    where: {
+      iadeId: { in: ids },
+      ...filtreAstreintesActivesIades(annee),
+    },
+    select: astreinteSelectPourPoints,
+  });
+
+  const map = new Map<string, AstreintePointsRow[]>();
+  for (const astreinte of astreintes) {
+    const liste = map.get(astreinte.iadeId) ?? [];
+    liste.push(astreinte);
+    map.set(astreinte.iadeId, liste);
+  }
+
+  for (const id of ids) {
+    if (!map.has(id)) {
+      map.set(id, []);
+    }
+  }
+
+  return map;
+}
+
 /** Recalcule les points cumulés d'un IADE en incluant des propositions simulées. */
 export async function calculerPointsCumulesAvecPropositions(
   iadeId: string,
@@ -308,8 +401,9 @@ export async function calculerPointsCumules(
 /** Somme poids + bonus de continuité pour tous les IADE actifs. */
 export async function calculerPointsCumulesTousIades(
   annee: number,
+  visibilite: AstreinteVisibilite = "toutes",
 ): Promise<Map<string, number>> {
-  const where = filtreAstreintesActivesIades(annee);
+  const where = filtreAstreintesActivesIades(annee, visibilite);
 
   const [activeIades, astreintes, bonusParLigne] = await Promise.all([
     prisma.utilisateur.findMany({
@@ -341,13 +435,18 @@ export async function calculerPointsCumulesTousIades(
   return points;
 }
 
-export async function getPointsOverview(annee: number): Promise<PointsOverview> {
+export async function getPointsOverview(
+  annee: number,
+  options: PointsOverviewOptions = {},
+): Promise<PointsOverview> {
+  const visibilite = options.visibilite ?? "toutes";
   const { start, end } = getCivilYearRange(annee);
   const whereAstreinte = {
     date: { gte: start, lt: end },
     statut: { not: StatutAstreinte.ANNULEE },
     iade: { role: Role.IADE, actif: true },
     ligne: { actif: true },
+    ...filtreVisibilitePoints(visibilite),
   } as const;
 
   const [lignes, iades, totals, grouped, groupedCreneau, astreintes, bonusParLigne] =
@@ -362,7 +461,7 @@ export async function getPointsOverview(annee: number): Promise<PointsOverview> 
       orderBy: [{ nom: "asc" }, { prenom: "asc" }],
       select: { id: true, nom: true, prenom: true },
     }),
-    calculerPointsCumulesTousIades(annee),
+    calculerPointsCumulesTousIades(annee, visibilite),
     prisma.astreinte.groupBy({
       by: ["iadeId", "ligneId"],
       where: whereAstreinte,
@@ -464,7 +563,7 @@ export async function getPointsOverview(annee: number): Promise<PointsOverview> 
 
   iadeRows.sort((a, b) => {
     if (a.pointsTotal !== b.pointsTotal) {
-      return a.pointsTotal - b.pointsTotal;
+      return b.pointsTotal - a.pointsTotal;
     }
 
     return a.nom.localeCompare(b.nom, "fr") || a.prenom.localeCompare(b.prenom, "fr");

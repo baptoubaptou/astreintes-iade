@@ -54,9 +54,9 @@ export function CreateLigneForm() {
         </div>
       </form>
       <p className="mt-3 text-xs text-zinc-500">
-        Les poids par créneau se configurent ensuite sur{" "}
-        <a href="/admin/poids-creneaux" className="underline">
-          Poids par créneau
+        Les points par créneau se configurent ensuite sur{" "}
+        <a href="/admin/points-creneaux" className="underline">
+          Points par créneau
         </a>
         .
       </p>

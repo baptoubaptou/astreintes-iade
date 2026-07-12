@@ -7,6 +7,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum JourSemaine {
+  LUNDI
+  MARDI
+  MERCREDI
+  JEUDI
+  VENDREDI
+  SAMEDI
+  DIMANCHE
+}
+
 enum Role {
   IADE
   CADRE
@@ -83,12 +93,15 @@ model Utilisateur {
   id               String   @id @default(cuid())
   nom              String
   prenom           String
+  matricule        String   @unique
   email            String   @unique
   motDePasseHash   String
   role             Role
   actif            Boolean  @default(true)
   createdAt        DateTime @default(now())
 
+  tokensReinitialisation TokenReinitialisationMotDePasse[]
+  changementsEmail       ChangementEmailEnAttente[]
   qualifications         Qualification[]
   astreintes             Astreinte[]
   demandesEchange        DemandeEchange[]        @relation("DemandeurEchange")
@@ -103,10 +116,12 @@ model Utilisateur {
 }
 
 model LigneAstreinte {
-  id            String  @id @default(cuid())
-  nom           String  @unique
-  actif         Boolean @default(true)
-  ordrePriorite Int
+  id                   String  @id @default(cuid())
+  nom                  String  @unique
+  actif                Boolean @default(true)
+  ordrePriorite        Int
+  /// Null = défaut dynamique 2× le poids max des créneaux de la ligne (mode lissé).
+  seuilEcartAberrant   Int?
 
   poidsCreneaux         PoidsCreneau[]
   bonusContinuite       BonusContinuite[]
@@ -170,7 +185,7 @@ model Astreinte {
   datePublication DateTime?
 
   ligne           LigneAstreinte   @relation(fields: [ligneId], references: [id])
-  iade            Utilisateur      @relation(fields: [iadeId], references: [id])
+  iade            Utilisateur      @relation(fields: [iadeId], references: [id], onDelete: Cascade)
   demandesEchange DemandeEchange[]
   offresAstreinte OffreAstreinte[]
 
@@ -186,9 +201,9 @@ model DemandeEchange {
   createdAt      DateTime             @default(now())
   dateTraitement DateTime?
 
-  astreinte  Astreinte    @relation(fields: [astreinteId], references: [id])
-  demandeur  Utilisateur  @relation("DemandeurEchange", fields: [demandeurId], references: [id])
-  remplacant Utilisateur? @relation("RemplacantEchange", fields: [remplacantId], references: [id])
+  astreinte  Astreinte    @relation(fields: [astreinteId], references: [id], onDelete: Cascade)
+  demandeur  Utilisateur  @relation("DemandeurEchange", fields: [demandeurId], references: [id], onDelete: Cascade)
+  remplacant Utilisateur? @relation("RemplacantEchange", fields: [remplacantId], references: [id], onDelete: Cascade)
 }
 
 model OffreAstreinte {
@@ -199,8 +214,8 @@ model OffreAstreinte {
   dateFermeture DateTime
   statut        StatutOffreAstreinte @default(OUVERTE)
 
-  astreinte    Astreinte     @relation(fields: [astreinteId], references: [id])
-  proposant    Utilisateur   @relation(fields: [proposantId], references: [id])
+  astreinte    Astreinte     @relation(fields: [astreinteId], references: [id], onDelete: Cascade)
+  proposant    Utilisateur   @relation(fields: [proposantId], references: [id], onDelete: Cascade)
   candidatures Candidature[]
 }
 
@@ -211,7 +226,7 @@ model Candidature {
   dateCandidature DateTime @default(now())
 
   offre OffreAstreinte @relation(fields: [offreId], references: [id], onDelete: Cascade)
-  iade  Utilisateur    @relation(fields: [iadeId], references: [id])
+  iade  Utilisateur    @relation(fields: [iadeId], references: [id], onDelete: Cascade)
 
   @@unique([offreId, iadeId])
 }
@@ -271,6 +286,49 @@ model FenetreGeneration {
   ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
 }
 
+model InscriptionEnAttente {
+  id               String   @id @default(cuid())
+  nom              String
+  prenom           String
+  matricule        String
+  email            String
+  motDePasseHash   String
+  ligneIds         String
+  codeHash         String
+  expireLe         DateTime
+  createdAt        DateTime @default(now())
+
+  @@index([email])
+  @@index([matricule])
+}
+
+model TokenReinitialisationMotDePasse {
+  id            String   @id @default(cuid())
+  utilisateurId String
+  tokenHash     String   @unique
+  expireLe      DateTime
+  utilise       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+
+  @@index([utilisateurId])
+}
+
+model ChangementEmailEnAttente {
+  id            String   @id @default(cuid())
+  utilisateurId String
+  nouvelEmail   String
+  codeHash      String
+  expireLe      DateTime
+  createdAt     DateTime @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+
+  @@index([utilisateurId])
+  @@index([nouvelEmail])
+}
+
 model JournalAudit {
   id             String          @id @default(cuid())
   dateAction     DateTime        @default(now())
@@ -280,6 +338,14 @@ model JournalAudit {
   resume         String
   detail         Json?
 
-  acteur       Utilisateur? @relation("AuditActeur", fields: [acteurId], references: [id], onDelete: SetNull)
-  iadeConcerne Utilisateur? @relation("AuditIadeConcerne", fields: [iadeConcerneId], references: [id], onDelete: SetNull)
+  acteur       Utilisateur? @relation("AuditActeur", fields: [acteurId], references: [id], onDelete: Cascade)
+  iadeConcerne Utilisateur? @relation("AuditIadeConcerne", fields: [iadeConcerneId], references: [id], onDelete: Cascade)
+}
+
+model ConfigurationEnvoiAutomatique {
+  id                 String      @id @default(cuid())
+  emailDestinataire  String      @default("")
+  jourEnvoi          JourSemaine @default(JEUDI)
+  actif              Boolean     @default(false)
+  dateDernierEnvoi   DateTime?
 }

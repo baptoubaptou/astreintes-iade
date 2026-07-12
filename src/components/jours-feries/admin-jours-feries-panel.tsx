@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   AstreinteBloquantDesactivation,
   JourFerieItem,
@@ -47,6 +47,14 @@ export function AdminJoursFeriesPanel({
     jourId: string;
     preview: PreviewDesactivationJourFerie;
   } | null>(null);
+
+  useEffect(() => {
+    setJoursFeries(initialJoursFeries);
+    setFeedback(null);
+    setError(null);
+    setAstreintesBloquantes([]);
+    setDeactivationPreview(null);
+  }, [annee, initialJoursFeries]);
 
   function navigateAnnee(target: number) {
     const params = new URLSearchParams(searchParams.toString());

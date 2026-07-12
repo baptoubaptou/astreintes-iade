@@ -7,26 +7,43 @@ export type LoginState = {
   error?: string;
 };
 
+function getSafeRedirectTo(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+    return "/app";
+  }
+
+  return value;
+}
+
+export async function connecterUtilisateur(
+  identifiant: string,
+  motDePasse: string,
+  redirectTo = "/app",
+): Promise<void> {
+  await signIn("credentials", {
+    identifiant,
+    password: motDePasse,
+    redirectTo,
+  });
+}
+
 export async function loginAction(
   _prevState: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const email = formData.get("email");
+  const identifiant = formData.get("identifiant");
   const password = formData.get("password");
+  const redirectTo = getSafeRedirectTo(formData.get("callbackUrl"));
 
-  if (typeof email !== "string" || typeof password !== "string") {
-    return { error: "Email et mot de passe requis." };
+  if (typeof identifiant !== "string" || typeof password !== "string") {
+    return { error: "Identifiant et mot de passe requis." };
   }
 
   try {
-    await signIn("credentials", {
-      email,
-      password,
-      redirectTo: "/app",
-    });
+    await connecterUtilisateur(identifiant, password, redirectTo);
   } catch (error) {
     if (error instanceof AuthError) {
-      return { error: "Email ou mot de passe incorrect." };
+      return { error: "Identifiant ou mot de passe incorrect." };
     }
     throw error;
   }

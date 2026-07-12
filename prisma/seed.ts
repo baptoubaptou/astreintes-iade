@@ -9,7 +9,7 @@ import {
 } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { calculerJoursFeries } from "../src/server/jours-feries";
-import { CLE_MODE_ATTRIBUTION } from "../src/server/parametre-algorithme";
+import { CLE_MODE_ATTRIBUTION, CLE_LISSE_SEUIL_ECART_ABERRANT, VALEUR_META_LISSE_SEUIL_ECART_ABERRANT } from "../src/server/parametre-algorithme";
 
 const prisma = new PrismaClient();
 
@@ -121,10 +121,18 @@ async function main() {
     },
   });
 
+  await prisma.parametreAlgorithme.create({
+    data: {
+      cle: CLE_LISSE_SEUIL_ECART_ABERRANT,
+      valeur: VALEUR_META_LISSE_SEUIL_ECART_ABERRANT,
+    },
+  });
+
   await prisma.utilisateur.create({
     data: {
       nom: "Leroy",
       prenom: "Nathalie",
+      matricule: "CADRE001",
       email: "cadre@test.local",
       motDePasseHash,
       role: Role.CADRE,
@@ -136,6 +144,7 @@ async function main() {
       data: {
         nom: "Dupont",
         prenom: "Marie",
+        matricule: "IADE001",
         email: "marie.dupont@test.local",
         motDePasseHash,
         role: Role.IADE,
@@ -145,6 +154,7 @@ async function main() {
       data: {
         nom: "Bernard",
         prenom: "Thomas",
+        matricule: "IADE002",
         email: "thomas.bernard@test.local",
         motDePasseHash,
         role: Role.IADE,
@@ -154,6 +164,7 @@ async function main() {
       data: {
         nom: "Martin",
         prenom: "Sophie",
+        matricule: "IADE003",
         email: "sophie.martin@test.local",
         motDePasseHash,
         role: Role.IADE,
@@ -163,6 +174,7 @@ async function main() {
       data: {
         nom: "Petit",
         prenom: "Lucas",
+        matricule: "IADE004",
         email: "lucas.petit@test.local",
         motDePasseHash,
         role: Role.IADE,
@@ -172,6 +184,7 @@ async function main() {
       data: {
         nom: "Rousseau",
         prenom: "Camille",
+        matricule: "IADE005",
         email: "camille.rousseau@test.local",
         motDePasseHash,
         role: Role.IADE,
@@ -181,6 +194,7 @@ async function main() {
       data: {
         nom: "Moreau",
         prenom: "Antoine",
+        matricule: "IADE006",
         email: "antoine.moreau@test.local",
         motDePasseHash,
         role: Role.IADE,

@@ -43,7 +43,8 @@ async function main() {
   );
   console.log("(Lecture seule — aucune écriture en base)\n");
 
-  const propositions = await genererPlanningAutomatique(dateDebut, dateFin);
+  const resultat = await genererPlanningAutomatique(dateDebut, dateFin);
+  const propositions = resultat.propositions;
   const resume = resumerPropositions(propositions);
 
   console.log("Résumé :", resume);

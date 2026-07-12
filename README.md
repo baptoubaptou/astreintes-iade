@@ -48,7 +48,8 @@ Variables indispensables :
 | `DATABASE_URL` | En local : `file:./dev.db` (relatif au dossier `prisma/`). Sous Docker, surchargée par Compose : `file:/app/data/dev.db` |
 | `AUTH_SECRET` | Secret Auth.js — générer avec `openssl rand -base64 32` |
 | `AUTH_URL` | URL publique de l'app (ex. `http://localhost:3000`) |
-| `SMTP_*` | Paramètres SMTP pour l'envoi d'e-mails en production |
+| `RESEND_API_KEY` | Clé API Resend pour l'envoi des e-mails de notification |
+| `RESEND_FROM` | Expéditeur (`Nom <email@domaine-verifie>`), domaine configuré dans Resend |
 
 La base SQLite est stockée dans `./data/dev.db` sur l'hôte (volume `./data:/app/data`). Elle n'est **pas** incluse dans l'image Docker.
 
@@ -76,6 +77,14 @@ DATABASE_URL="file:../data/dev.db" npm run db:seed
 ### Commandes utiles
 
 ```bash
+# Vérifier l'état de santé du conteneur app
+docker compose ps
+curl http://localhost:3000/api/health
+```
+
+Le healthcheck Docker interroge `GET /api/health` (réponse `{ "status": "ok" }`) toutes les 30 s. Le service Caddy ne démarre qu'une fois l'application déclarée saine.
+
+```bash
 # Voir les logs
 docker compose logs -f app
 
@@ -94,9 +103,17 @@ Le Dockerfile utilise `node:22-bookworm-slim` (Debian, glibc) plutôt qu'Alpine 
 
 Le script `scripts/backup.sh` copie la base SQLite vers `backups/astreintes-AAAA-MM-JJ-HHMM.db`, purge les sauvegardes plus anciennes que la rétention configurée (30 jours par défaut) et journalise chaque exécution dans `backups/backup.log`.
 
+**Résolution du chemin de la base** (par ordre de priorité) :
+
+1. `DB_PATH` — si la variable est explicitement définie, elle est utilisée telle quelle.
+2. `DATABASE_URL` — sinon, le script lit `DATABASE_URL` depuis l'environnement ou le fichier `.env` à la racine du projet, puis en extrait le chemin SQLite (`file:…`). Les chemins relatifs sont interprétés comme Prisma le fait : relatifs au dossier `prisma/` (ex. `file:./dev.db` → `prisma/dev.db` ; sous Docker `file:/app/data/dev.db` reste absolu).
+
 ```bash
-# Sauvegarde manuelle (depuis la racine du projet, base Docker par défaut)
+# Sauvegarde manuelle (lit DATABASE_URL depuis .env en local)
 ./scripts/backup.sh
+
+# Surcharge explicite du chemin
+DB_PATH=./data/dev.db ./scripts/backup.sh
 
 # Rétention personnalisée (ex. 14 jours)
 RETENTION_DAYS=14 ./scripts/backup.sh
@@ -112,7 +129,10 @@ Ajouter la ligne suivante en adaptant le chemin absolu du projet :
 
 ```cron
 0 3 * * * cd /chemin/vers/astreintes-iade && ./scripts/backup.sh >> /chemin/vers/astreintes-iade/backups/cron.log 2>&1
+0 3 * * * cd /chemin/vers/astreintes-iade && npm run cron:quotidien >> /chemin/vers/astreintes-iade/backups/cron.log 2>&1
 ```
+
+Le script `npm run cron:quotidien` exécute chaque jour la clôture des offres de bourse expirées (`cloturerOffresExpirees`) et, si la configuration l'exige, l'envoi automatique du planning publié par e-mail. Une seule exécution quotidienne suffit.
 
 Vérifier les exécutions : `tail -f backups/backup.log` (résultat du script) et `backups/cron.log` (sortie crontab éventuelle).
 
