@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  IADE
+  CADRE
+}
+
+enum StatutAstreinte {
+  PLANIFIEE
+  ECHANGEE
+  ANNULEE
+}
+
+enum StatutDemandeEchange {
+  EN_ATTENTE
+  VALIDEE
+  REFUSEE
+}
+
+enum StatutOffreAstreinte {
+  OUVERTE
+  ATTRIBUEE
+  ANNULEE
+  SANS_CANDIDAT
+}
+
+enum TypeCreneau {
+  NUIT_SEMAINE
+  JOUR_SAMEDI
+  NUIT_SAMEDI
+  JOUR_DIMANCHE
+  NUIT_DIMANCHE
+  JOUR_FERIE
+  NUIT_FERIE
+}
+
+enum SourceJourFerie {
+  AUTO
+  MANUEL
+}
+
+enum TypePreferenceContinuite {
+  JOUR_NUIT
+  WEEKEND_48H
+}
+
+enum TypeBonusContinuite {
+  JOUR_NUIT
+  WEEKEND_48H
+}
+
+enum ModeAttribution {
+  GLOUTON
+  LISSE
+}
+
+enum StatutFenetreGeneration {
+  PLANIFIEE
+  CONFIRMEE
+}
+
+enum TypeActionAudit {
+  DISPONIBILITE_AJOUTEE
+  DISPONIBILITE_SUPPRIMEE_MANUELLE
+  DISPONIBILITE_SUPPRIMEE_AUTO
+  ASTREINTE_CREEE
+  ASTREINTE_MODIFIEE
+  ASTREINTE_ANNULEE
+  PREFERENCE_AJOUTEE
+  PREFERENCE_SUPPRIMEE
+  CAMPAGNE_CONFIRMEE
+  PLANNING_PUBLIE
+}
+
+model Utilisateur {
+  id               String   @id @default(cuid())
+  nom              String
+  prenom           String
+  email            String   @unique
+  motDePasseHash   String
+  role             Role
+  actif            Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  qualifications         Qualification[]
+  astreintes             Astreinte[]
+  demandesEchange        DemandeEchange[]        @relation("DemandeurEchange")
+  demandesRemplacement   DemandeEchange[]        @relation("RemplacantEchange")
+  offresAstreinte        OffreAstreinte[]
+  candidatures           Candidature[]
+  disponibilites         Disponibilite[]
+  preferencesContinuite    PreferenceContinuite[]
+  notifications          Notification[]
+  auditsRealises         JournalAudit[]          @relation("AuditActeur")
+  auditsConcernant       JournalAudit[]          @relation("AuditIadeConcerne")
+}
+
+model LigneAstreinte {
+  id            String  @id @default(cuid())
+  nom           String  @unique
+  actif         Boolean @default(true)
+  ordrePriorite Int
+
+  poidsCreneaux         PoidsCreneau[]
+  bonusContinuite       BonusContinuite[]
+  qualifications        Qualification[]
+  astreintes            Astreinte[]
+  disponibilites        Disponibilite[]
+  preferencesContinuite PreferenceContinuite[]
+  fenetresGeneration    FenetreGeneration[]
+}
+
+model PoidsCreneau {
+  id          String      @id @default(cuid())
+  ligneId     String
+  typeCreneau TypeCreneau
+  poids       Int
+
+  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+
+  @@unique([ligneId, typeCreneau])
+}
+
+model BonusContinuite {
+  id      String              @id @default(cuid())
+  ligneId String
+  type    TypeBonusContinuite
+  bonus   Int
+
+  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+
+  @@unique([ligneId, type])
+}
+
+model Qualification {
+  id      String @id @default(cuid())
+  iadeId  String
+  ligneId String
+
+  iade  Utilisateur    @relation(fields: [iadeId], references: [id], onDelete: Cascade)
+  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+
+  @@unique([iadeId, ligneId])
+}
+
+model JourFerie {
+  id     String          @id @default(cuid())
+  date   DateTime        @unique
+  nom    String
+  source SourceJourFerie
+  actif  Boolean         @default(true)
+}
+
+model Astreinte {
+  id              String          @id @default(cuid())
+  date            DateTime
+  ligneId         String
+  typeCreneau     TypeCreneau     @default(NUIT_SEMAINE)
+  iadeId          String
+  statut          StatutAstreinte @default(PLANIFIEE)
+  pointsAttribues Int
+  publie          Boolean         @default(false)
+  datePublication DateTime?
+
+  ligne           LigneAstreinte   @relation(fields: [ligneId], references: [id])
+  iade            Utilisateur      @relation(fields: [iadeId], references: [id])
+  demandesEchange DemandeEchange[]
+  offresAstreinte OffreAstreinte[]
+
+  @@unique([date, ligneId, typeCreneau])
+}
+
+model DemandeEchange {
+  id             String               @id @default(cuid())
+  astreinteId    String
+  demandeurId    String
+  remplacantId   String?
+  statut         StatutDemandeEchange @default(EN_ATTENTE)
+  createdAt      DateTime             @default(now())
+  dateTraitement DateTime?
+
+  astreinte  Astreinte    @relation(fields: [astreinteId], references: [id])
+  demandeur  Utilisateur  @relation("DemandeurEchange", fields: [demandeurId], references: [id])
+  remplacant Utilisateur? @relation("RemplacantEchange", fields: [remplacantId], references: [id])
+}
+
+model OffreAstreinte {
+  id            String               @id @default(cuid())
+  astreinteId   String
+  proposantId   String
+  dateOuverture DateTime
+  dateFermeture DateTime
+  statut        StatutOffreAstreinte @default(OUVERTE)
+
+  astreinte    Astreinte     @relation(fields: [astreinteId], references: [id])
+  proposant    Utilisateur   @relation(fields: [proposantId], references: [id])
+  candidatures Candidature[]
+}
+
+model Candidature {
+  id              String   @id @default(cuid())
+  offreId         String
+  iadeId          String
+  dateCandidature DateTime @default(now())
+
+  offre OffreAstreinte @relation(fields: [offreId], references: [id], onDelete: Cascade)
+  iade  Utilisateur    @relation(fields: [iadeId], references: [id])
+
+  @@unique([offreId, iadeId])
+}
+
+model Disponibilite {
+  id          String      @id @default(cuid())
+  iadeId      String
+  ligneId     String
+  date        DateTime
+  typeCreneau TypeCreneau
+
+  iade  Utilisateur    @relation(fields: [iadeId], references: [id], onDelete: Cascade)
+  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+
+  @@unique([iadeId, ligneId, date, typeCreneau])
+}
+
+model PreferenceContinuite {
+  id        String                   @id @default(cuid())
+  iadeId    String
+  ligneId   String
+  dateDebut DateTime
+  type      TypePreferenceContinuite
+
+  iade  Utilisateur    @relation(fields: [iadeId], references: [id], onDelete: Cascade)
+  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+
+  @@unique([iadeId, ligneId, dateDebut, type])
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  utilisateurId String
+  type          String
+  message       String
+  lu            Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  utilisateur Utilisateur @relation(fields: [utilisateurId], references: [id], onDelete: Cascade)
+}
+
+model ParametreAlgorithme {
+  id     String @id @default(cuid())
+  cle    String @unique
+  valeur String
+}
+
+model FenetreGeneration {
+  id                   String                  @id @default(cuid())
+  ligneId              String
+  periodeDebut         DateTime
+  periodeFin           DateTime
+  dateGenerationPrevue DateTime
+  statut               StatutFenetreGeneration @default(PLANIFIEE)
+  dateConfirmation     DateTime?
+
+  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+}
+
+model JournalAudit {
+  id             String          @id @default(cuid())
+  dateAction     DateTime        @default(now())
+  acteurId       String?
+  typeAction     TypeActionAudit
+  iadeConcerneId String?
+  resume         String
+  detail         Json?
+
+  acteur       Utilisateur? @relation("AuditActeur", fields: [acteurId], references: [id], onDelete: SetNull)
+  iadeConcerne Utilisateur? @relation("AuditIadeConcerne", fields: [iadeConcerneId], references: [id], onDelete: SetNull)
+}

@@ -1,0 +1,29 @@
+# Fichier complémentaire pour l'exposition publique via Cloudflare Tunnel.
+# Ce service n'est PAS démarré par un simple `docker compose up`.
+#
+# Prérequis avant activation :
+#
+#   1. Copier le modèle de configuration :
+#        cp cloudflare/config.yml.example cloudflare/config.yml
+#
+#   2. Placer le fichier credentials téléchargé depuis Cloudflare dans :
+#        cloudflare/credentials/<TUNNEL_ID>.json
+#      (<TUNNEL_ID> = UUID du tunnel affiché dans le tableau de bord Cloudflare)
+#
+#   3. Éditer cloudflare/config.yml :
+#      - remplacer <TUNNEL_ID> par l'UUID réel du tunnel
+#      - remplacer <DOMAIN> par le domaine public (ex. astreintes.baptou.me)
+#
+# Lancement (en complément du compose principal) :
+#   docker compose -f docker-compose.yml -f docker-compose.cloudflare.yml up -d
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflare/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare/credentials:/etc/cloudflared/credentials:ro
+    depends_on:
+      - caddy

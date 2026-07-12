@@ -1,0 +1,11 @@
+# Reverse proxy Caddy — Astreintes IADE
+#
+# Écoute sur le port 80 et transmet tout le trafic HTTP
+# vers le service Docker "app" (Next.js sur le port 3000).
+#
+# En déploiement public, Cloudflare Tunnel pointe vers http://caddy:80
+# sur le réseau Docker interne (voir docker-compose.cloudflare.yml).
+
+:80 {
+	reverse_proxy app:3000
+}

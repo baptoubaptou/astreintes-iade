@@ -1,0 +1,24 @@
+# Exemple de configuration Cloudflare Tunnel — à copier vers config.yml
+#
+# Étapes :
+#   1. cp cloudflare/config.yml.example cloudflare/config.yml
+#   2. Remplacer <TUNNEL_ID> par l'UUID du tunnel (tableau de bord Cloudflare)
+#   3. Remplacer <DOMAIN> par le nom de domaine public (ex. astreintes.baptou.me)
+#   4. Placer le fichier credentials téléchargé dans :
+#      cloudflare/credentials/<TUNNEL_ID>.json
+#
+# Documentation :
+#   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+
+# Identifiant UUID du tunnel Cloudflare
+tunnel: <TUNNEL_ID>
+
+# Credentials générés à la création du tunnel (ne pas versionner ce fichier)
+credentials-file: /etc/cloudflared/credentials/<TUNNEL_ID>.json
+
+# Routage du trafic entrant vers Caddy (reverse proxy interne)
+ingress:
+  - hostname: <DOMAIN>
+    service: http://caddy:80
+  # Règle de repli obligatoire (doit être la dernière entrée)
+  - service: http_status:404
