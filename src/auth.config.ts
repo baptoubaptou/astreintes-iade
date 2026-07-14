@@ -2,6 +2,8 @@ import type { Role } from "@prisma/client";
 import type { NextAuthConfig } from "next-auth";
 
 export const authConfig = {
+  // Derrière Cloudflare/Caddy : utiliser l'hôte de la requête (évite les redirects vers AUTH_URL si le domaine diffère).
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
