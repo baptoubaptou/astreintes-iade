@@ -1,6 +1,9 @@
 import { ModeAttribution } from "@prisma/client";
 import { LIBELLES_MODE_ATTRIBUTION } from "@/lib/mode-attribution";
 import { prisma } from "@/lib/db";
+import type { SeuilEcartAberrantLigne } from "@/types/parametre-algorithme";
+
+export type { SeuilEcartAberrantLigne };
 
 export const CLE_MODE_ATTRIBUTION = "mode_attribution";
 
@@ -17,16 +20,6 @@ export const VALEUR_META_LISSE_SEUIL_ECART_ABERRANT =
   "par_ligne;defaut=2×max(PoidsCreneau.poids)";
 
 export { LIBELLES_MODE_ATTRIBUTION };
-
-export type SeuilEcartAberrantLigne = {
-  ligneId: string;
-  nom: string;
-  seuilEffectif: number;
-  seuilDefaut: number;
-  seuilPersonnalise: number | null;
-  /** Poids le plus élevé parmi les créneaux de la ligne (pour affichage du défaut 2×). */
-  poidsMax: number;
-};
 
 export async function getModeAttribution(): Promise<ModeAttribution> {
   const record = await prisma.parametreAlgorithme.findUnique({

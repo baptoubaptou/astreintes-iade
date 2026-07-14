@@ -1,15 +1,16 @@
 "use client";
 
-import { ModeAttribution } from "@prisma/client";
 import { useState } from "react";
 import {
   LIBELLES_MODE_ATTRIBUTION,
+  MODE_ATTRIBUTION,
   MODES_ATTRIBUTION,
+  type ModeAttributionValue,
 } from "@/lib/mode-attribution";
-import type { SeuilEcartAberrantLigne } from "@/server/parametre-algorithme";
+import type { SeuilEcartAberrantLigne } from "@/types/parametre-algorithme";
 
 type AdminAlgorithmePanelProps = {
-  modeInitial: ModeAttribution;
+  modeInitial: ModeAttributionValue;
   seuilsInitiaux: SeuilEcartAberrantLigne[];
 };
 
@@ -42,7 +43,7 @@ export function AdminAlgorithmePanel({
     ),
   );
 
-  async function handleChangeMode(nextMode: ModeAttribution) {
+  async function handleChangeMode(nextMode: ModeAttributionValue) {
     setMode(nextMode);
     setError(null);
     setMessage(null);
@@ -153,7 +154,7 @@ export function AdminAlgorithmePanel({
 
       <section
         className={`space-y-4 rounded border p-4 ${
-          mode === ModeAttribution.LISSE
+          mode === MODE_ATTRIBUTION.LISSE
             ? "border-zinc-200"
             : "border-zinc-100 bg-zinc-50 opacity-90"
         }`}
@@ -184,7 +185,7 @@ export function AdminAlgorithmePanel({
             </p>
           </div>
 
-          {mode !== ModeAttribution.LISSE ? (
+          {mode !== MODE_ATTRIBUTION.LISSE ? (
             <p className="text-sm text-zinc-600">
               Ce réglage ne s&apos;applique que lorsque le mode{" "}
               <strong>Lissé</strong> est actif. Il est affiché ici à titre
@@ -240,7 +241,7 @@ export function AdminAlgorithmePanel({
                           [ligne.ligneId]: event.target.value,
                         }))
                       }
-                      disabled={mode !== ModeAttribution.LISSE}
+                      disabled={mode !== MODE_ATTRIBUTION.LISSE}
                       className="w-32 rounded border border-zinc-300 px-2 py-1 disabled:bg-zinc-100"
                     />
                     <p className="mt-1 text-xs text-zinc-500">
@@ -253,7 +254,7 @@ export function AdminAlgorithmePanel({
                       onClick={() => handleSaveSeuil(ligne)}
                       disabled={
                         savingLigneId === ligne.ligneId ||
-                        mode !== ModeAttribution.LISSE
+                        mode !== MODE_ATTRIBUTION.LISSE
                       }
                       className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-50"
                     >
