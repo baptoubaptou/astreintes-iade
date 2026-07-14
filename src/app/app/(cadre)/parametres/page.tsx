@@ -12,8 +12,8 @@ export default async function ParametresPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Paramètres</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Configuration de l&apos;application : utilisateurs, lignes, points par
-          créneau, jours fériés et algorithme.
+          Mon compte et configuration de l&apos;application : utilisateurs,
+          lignes, points par créneau, jours fériés et algorithme.
         </p>
       </header>
 

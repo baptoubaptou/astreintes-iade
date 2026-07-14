@@ -1,29 +1,23 @@
-# Fichier complémentaire pour l'exposition publique via Cloudflare Tunnel.
-# Ce service n'est PAS démarré par un simple `docker compose up`.
+# Exposition publique via Cloudflare Tunnel (complément de docker-compose.yml).
 #
-# Prérequis avant activation :
+# Prérequis :
+#   1. Créer un tunnel dans Cloudflare Zero Trust (connecteur Docker / token)
+#   2. Ajouter dans .env : CLOUDFLARE_TUNNEL_TOKEN="eyJ..."
+#   3. Dans Zero Trust → tunnel → Public Hostname :
+#        Service URL = http://caddy:80  (réseau Docker, PAS localhost)
+#   4. AUTH_URL dans .env = https://votre-sous-domaine.votre-domaine
 #
-#   1. Copier le modèle de configuration :
-#        cp cloudflare/config.yml.example cloudflare/config.yml
-#
-#   2. Placer le fichier credentials téléchargé depuis Cloudflare dans :
-#        cloudflare/credentials/<TUNNEL_ID>.json
-#      (<TUNNEL_ID> = UUID du tunnel affiché dans le tableau de bord Cloudflare)
-#
-#   3. Éditer cloudflare/config.yml :
-#      - remplacer <TUNNEL_ID> par l'UUID réel du tunnel
-#      - remplacer <DOMAIN> par le domaine public (ex. astreintes.baptou.me)
-#
-# Lancement (en complément du compose principal) :
+# Lancement :
 #   docker compose -f docker-compose.yml -f docker-compose.cloudflare.yml up -d
+#
+# Alternative (config.yml + credentials JSON) : voir cloudflare/config.yml.example
 
 services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    command: tunnel --config /etc/cloudflared/config.yml run
-    volumes:
-      - ./cloudflare/config.yml:/etc/cloudflared/config.yml:ro
-      - ./cloudflare/credentials:/etc/cloudflared/credentials:ro
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    env_file:
+      - .env
     depends_on:
       - caddy

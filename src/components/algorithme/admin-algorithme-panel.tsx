@@ -1,7 +1,7 @@
 "use client";
 
+import { ModeAttribution } from "@prisma/client";
 import { useState } from "react";
-import type { ModeAttribution } from "@prisma/client";
 import {
   LIBELLES_MODE_ATTRIBUTION,
   MODES_ATTRIBUTION,
@@ -12,6 +12,14 @@ type AdminAlgorithmePanelProps = {
   modeInitial: ModeAttribution;
   seuilsInitiaux: SeuilEcartAberrantLigne[];
 };
+
+function libelleSeuilEffectif(ligne: SeuilEcartAberrantLigne): string {
+  if (ligne.seuilPersonnalise != null) {
+    return `${ligne.seuilEffectif} points (personnalisé)`;
+  }
+
+  return `${ligne.seuilEffectif} points (défaut : 2 × ${ligne.poidsMax})`;
+}
 
 export function AdminAlgorithmePanel({
   modeInitial,
@@ -127,33 +135,67 @@ export function AdminAlgorithmePanel({
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">Mode d&apos;attribution</legend>
-        {MODES_ATTRIBUTION.map((value) => (
-          <label key={value} className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="modeAttribution"
-              value={value}
-              checked={mode === value}
-              disabled={isSavingMode}
-              onChange={() => handleChangeMode(value)}
-            />
-            <span>{LIBELLES_MODE_ATTRIBUTION[value]}</span>
-          </label>
-        ))}
+          {MODES_ATTRIBUTION.map((value) => (
+            <label key={value} className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="modeAttribution"
+                value={value}
+                checked={mode === value}
+                disabled={isSavingMode}
+                onChange={() => handleChangeMode(value)}
+              />
+              <span>{LIBELLES_MODE_ATTRIBUTION[value]}</span>
+            </label>
+          ))}
         </fieldset>
       </section>
 
-      <section className="space-y-4 rounded border border-zinc-200 p-4">
-        <div>
+      <section
+        className={`space-y-4 rounded border p-4 ${
+          mode === ModeAttribution.LISSE
+            ? "border-zinc-200"
+            : "border-zinc-100 bg-zinc-50 opacity-90"
+        }`}
+      >
+        <div className="space-y-3">
           <h2 className="text-sm font-medium">
-            Seuil d&apos;écart aberrant (mode lissé)
+            Seuil d&apos;écart aberrant entre IADE (mode lissé)
           </h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Paramètre <code className="text-xs">lisse_seuil_ecart_aberrant</code>{" "}
-            — réglage par ligne sur{" "}
-            <code className="text-xs">LigneAstreinte.seuilEcartAberrant</code>.
-            Laissez vide pour appliquer le défaut :{" "}
-            <strong>2× le poids du créneau le plus élevé</strong> de la ligne.
+
+          <div className="rounded border border-blue-100 bg-blue-50 px-3 py-3 text-sm text-blue-950">
+            <p className="font-medium">À quoi ça sert ?</p>
+            <p className="mt-1">
+              Après la première passe de lissage (échanges de blocs sans casser
+              la continuité), l&apos;algorithme mesure l&apos;
+              <strong>écart de points</strong> sur chaque ligne : différence
+              entre l&apos;IADE le plus haut et le plus bas.
+            </p>
+            <p className="mt-2">
+              Si cet écart <strong>dépasse le seuil</strong> configuré ci-dessous,
+              une seconde passe peut exceptionnellement{" "}
+              <strong>casser un bloc de continuité</strong> pour le réduire —
+              uniquement si la variance globale n&apos;est pas dégradée.
+            </p>
+            <p className="mt-2 text-blue-900">
+              Exemple : seuil = 8 points → si un IADE est à 20 points et un autre
+              à 10 (écart 10), la passe 2 peut intervenir ; si l&apos;écart est 6,
+              aucune cassure n&apos;est tentée.
+            </p>
+          </div>
+
+          {mode !== ModeAttribution.LISSE ? (
+            <p className="text-sm text-zinc-600">
+              Ce réglage ne s&apos;applique que lorsque le mode{" "}
+              <strong>Lissé</strong> est actif. Il est affiché ici à titre
+              informatif.
+            </p>
+          ) : null}
+
+          <p className="text-sm text-zinc-600">
+            <strong>Valeur par défaut</strong> (champ vide) :{" "}
+            <span className="font-mono">2 × poids max</span> des créneaux de la
+            ligne. Le poids max est celui configuré dans Poids des créneaux.
           </p>
         </div>
 
@@ -162,8 +204,10 @@ export function AdminAlgorithmePanel({
             <thead>
               <tr className="border-b text-left text-zinc-600">
                 <th className="py-2 pr-4 font-medium">Ligne</th>
-                <th className="py-2 pr-4 font-medium">Défaut (2× poids max)</th>
-                <th className="py-2 pr-4 font-medium">Seuil personnalisé</th>
+                <th className="py-2 pr-4 font-medium">Poids max créneau</th>
+                <th className="py-2 pr-4 font-medium">Défaut (2 × poids max)</th>
+                <th className="py-2 pr-4 font-medium">Seuil en vigueur</th>
+                <th className="py-2 pr-4 font-medium">Personnaliser</th>
                 <th className="py-2 font-medium">Action</th>
               </tr>
             </thead>
@@ -173,15 +217,22 @@ export function AdminAlgorithmePanel({
                   <td className="py-3 pr-4 font-medium text-zinc-900">
                     {ligne.nom}
                   </td>
-                  <td className="py-3 pr-4 text-zinc-600">
+                  <td className="py-3 pr-4 font-mono text-zinc-600">
+                    {ligne.poidsMax}
+                  </td>
+                  <td className="py-3 pr-4 font-mono text-zinc-600">
                     {ligne.seuilDefaut}
+                  </td>
+                  <td className="py-3 pr-4 text-zinc-900">
+                    {libelleSeuilEffectif(ligne)}
                   </td>
                   <td className="py-3 pr-4">
                     <input
                       type="number"
                       min={1}
                       step={1}
-                      placeholder={String(ligne.seuilDefaut)}
+                      aria-label={`Seuil personnalisé pour ${ligne.nom}`}
+                      placeholder={`Défaut : ${ligne.seuilDefaut}`}
                       value={draftSeuils[ligne.ligneId] ?? ""}
                       onChange={(event) =>
                         setDraftSeuils((current) => ({
@@ -189,14 +240,21 @@ export function AdminAlgorithmePanel({
                           [ligne.ligneId]: event.target.value,
                         }))
                       }
-                      className="w-28 rounded border border-zinc-300 px-2 py-1"
+                      disabled={mode !== ModeAttribution.LISSE}
+                      className="w-32 rounded border border-zinc-300 px-2 py-1 disabled:bg-zinc-100"
                     />
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Vide = défaut
+                    </p>
                   </td>
                   <td className="py-3">
                     <button
                       type="button"
                       onClick={() => handleSaveSeuil(ligne)}
-                      disabled={savingLigneId === ligne.ligneId}
+                      disabled={
+                        savingLigneId === ligne.ligneId ||
+                        mode !== ModeAttribution.LISSE
+                      }
                       className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-50"
                     >
                       {savingLigneId === ligne.ligneId

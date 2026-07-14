@@ -24,6 +24,8 @@ export type SeuilEcartAberrantLigne = {
   seuilEffectif: number;
   seuilDefaut: number;
   seuilPersonnalise: number | null;
+  /** Poids le plus élevé parmi les créneaux de la ligne (pour affichage du défaut 2×). */
+  poidsMax: number;
 };
 
 export async function getModeAttribution(): Promise<ModeAttribution> {
@@ -138,6 +140,10 @@ export async function listSeuilsEcartAberrantParLigne(): Promise<
   });
 
   return lignes.map((ligne) => {
+    const poidsMax = ligne.poidsCreneaux.reduce(
+      (max, entry) => Math.max(max, entry.poids),
+      0,
+    );
     const seuilDefaut = calculerSeuilEcartAberrantDefautDepuisPoids(
       ligne.poidsCreneaux,
     );
@@ -148,6 +154,7 @@ export async function listSeuilsEcartAberrantParLigne(): Promise<
       seuilEffectif: ligne.seuilEcartAberrant ?? seuilDefaut,
       seuilDefaut,
       seuilPersonnalise: ligne.seuilEcartAberrant,
+      poidsMax,
     };
   });
 }

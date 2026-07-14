@@ -20,8 +20,8 @@ export default async function AdminParametresAlgorithmePage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold">Paramètres de l&apos;algorithme</h1>
         <p className="mt-1 text-sm text-zinc-600">
-          Mode d&apos;attribution et seuils du mode lissé pour la génération
-          automatique du planning.
+          Mode d&apos;attribution pour la génération automatique, et seuils
+          d&apos;écart entre IADE (passe 2 du mode lissé) par ligne d&apos;astreinte.
         </p>
       </header>
       <AdminAlgorithmePanel

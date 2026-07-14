@@ -4,20 +4,29 @@ export type NavItem = {
   children?: NavItem[];
 };
 
+/** Profil personnel (IADE et cadre). */
+export const monCompteNavItem: NavItem = {
+  href: "/app/mon-compte",
+  label: "Mon compte",
+};
+
 export const sharedNavItems: NavItem[] = [
   { href: "/mes-astreintes", label: "Mes astreintes" },
   { href: "/mes-disponibilites", label: "Mes disponibilités" },
   { href: "/planning", label: "Planning collectif" },
   { href: "/points", label: "Points" },
   { href: "/app/bourse", label: "Bourse aux astreintes" },
-  { href: "/app/mon-compte", label: "Mon compte" },
+  {
+    href: "/app/mon-compte",
+    label: "Paramètres",
+    children: [monCompteNavItem],
+  },
 ];
 
 /** Entrées visibles pour le cadre (hors sous-menus). */
 export const cadrePersonalNavItems: NavItem[] = [
   { href: "/points", label: "Points" },
   { href: "/app/bourse", label: "Bourse aux astreintes" },
-  { href: "/app/mon-compte", label: "Mon compte" },
 ];
 
 export const planningNavChildren: NavItem[] = [
@@ -33,6 +42,7 @@ export const planningNavChildren: NavItem[] = [
 ];
 
 export const parametresNavChildren: NavItem[] = [
+  monCompteNavItem,
   { href: "/app/utilisateurs", label: "Gestion des utilisateurs" },
   { href: "/admin/qualifications", label: "Qualifications" },
   { href: "/admin/lignes", label: "Lignes d'astreinte" },
