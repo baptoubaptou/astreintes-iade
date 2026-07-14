@@ -21,6 +21,11 @@ RUN npx prisma generate \
   && npx prisma migrate deploy \
   && npm run build
 
+# CLI Prisma isolée avec toutes ses dépendances (effect, @prisma/config, engines…)
+FROM base AS prisma-migrate
+WORKDIR /migrate
+RUN npm install prisma@6.19.3
+
 FROM base AS runtime
 ENV NODE_ENV=production
 ENV PORT=3000
@@ -38,9 +43,9 @@ COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Ne pas embarquer de secrets éventuellement générés au build Next.js
 RUN rm -f /app/.env
 COPY --from=build /app/prisma ./prisma
+COPY --from=prisma-migrate /migrate/node_modules ./prisma-migrate/node_modules
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
 COPY --from=build /app/node_modules/bcrypt ./node_modules/bcrypt
 COPY --from=build /app/package.json ./package.json
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
