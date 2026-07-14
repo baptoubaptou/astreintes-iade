@@ -4,7 +4,7 @@ set -e
 mkdir -p /app/data
 
 echo "Application des migrations Prisma..."
-./node_modules/.bin/prisma migrate deploy
+node ./node_modules/prisma/build/index.js migrate deploy
 
 chown -R nextjs:nodejs /app/data
 
