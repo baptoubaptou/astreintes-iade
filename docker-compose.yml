@@ -29,8 +29,10 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    ports:
-      - "80:80"
+    # Port 80 uniquement sur le réseau Docker (cloudflared → http://caddy:80).
+    # Pas de publication sur l'hôte : évite le conflit avec nginx et autres services.
+    expose:
+      - "80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

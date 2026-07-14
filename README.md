@@ -62,7 +62,7 @@ docker compose up -d --build
 
 L'application est accessible sur :
 - [http://localhost:3000](http://localhost:3000) — accès direct au conteneur `app`
-- [http://localhost](http://localhost) — via le reverse proxy Caddy (port 80)
+- [http://localhost](http://localhost) — via Caddy sur le port 80, uniquement avec `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d` (si le port 80 est libre sur l'hôte)
 
 ### Migrations Prisma (premier démarrage et mises à jour)
 

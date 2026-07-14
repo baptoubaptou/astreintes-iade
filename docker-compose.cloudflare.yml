@@ -21,8 +21,3 @@ services:
       - .env
     depends_on:
       - caddy
-
-  # Derrière Cloudflare : pas de port 80 sur l'hôte (évite conflit avec nginx, etc.)
-  # Le tunnel atteint Caddy via le réseau Docker : http://caddy:80
-  caddy:
-    ports: []

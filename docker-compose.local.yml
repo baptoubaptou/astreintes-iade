@@ -1,0 +1,6 @@
+# Optionnel : exposer Caddy sur le port 80 de l'hôte (dev local sans Cloudflare).
+# docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+services:
+  caddy:
+    ports:
+      - "80:80"
