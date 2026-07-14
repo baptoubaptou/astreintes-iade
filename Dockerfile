@@ -11,7 +11,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-RUN npm ci
+# Aligner npm sur la version du lock file (npm 10 de l'image échoue sur npm ci).
+RUN npm install -g npm@11.7.0 \
+  && npm ci
 
 FROM deps AS build
 COPY . .
