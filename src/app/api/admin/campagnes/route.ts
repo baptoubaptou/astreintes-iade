@@ -9,18 +9,35 @@ import {
 } from "@/server/campagnes";
 import { publierCampagne } from "@/server/publication-planning";
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await assertCadreApi();
   if ("response" in auth) {
     return auth.response;
   }
 
-  const [lignes, lignesOptions] = await Promise.all([
-    listCampagnesParLigne(),
+  const { searchParams } = new URL(request.url);
+  const archiveeParam = searchParams.get("archivee");
+
+  if (archiveeParam === "true") {
+    const lignes = await listCampagnesParLigne({ archivee: true });
+    return NextResponse.json({ lignes });
+  }
+
+  if (archiveeParam === "false") {
+    const [lignes, lignesOptions] = await Promise.all([
+      listCampagnesParLigne({ archivee: false }),
+      listLignesCampagneOptions(),
+    ]);
+    return NextResponse.json({ lignes, lignesOptions });
+  }
+
+  const [lignes, campagnesArchivees, lignesOptions] = await Promise.all([
+    listCampagnesParLigne({ archivee: false }),
+    listCampagnesParLigne({ archivee: true }),
     listLignesCampagneOptions(),
   ]);
 
-  return NextResponse.json({ lignes, lignesOptions });
+  return NextResponse.json({ lignes, campagnesArchivees, lignesOptions });
 }
 
 export async function POST(request: Request) {

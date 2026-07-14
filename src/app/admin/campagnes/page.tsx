@@ -8,8 +8,9 @@ import { requireCadre } from "@/server/require-cadre";
 export default async function AdminCampagnesPage() {
   await requireCadre();
 
-  const [lignes, lignesOptions] = await Promise.all([
-    listCampagnesParLigne(),
+  const [lignes, campagnesArchivees, lignesOptions] = await Promise.all([
+    listCampagnesParLigne({ archivee: false }),
+    listCampagnesParLigne({ archivee: true }),
     listLignesCampagneOptions(),
   ]);
 
@@ -22,7 +23,11 @@ export default async function AdminCampagnesPage() {
           automatique du planning.
         </p>
       </header>
-      <AdminCampagnesPanel lignes={lignes} lignesOptions={lignesOptions} />
+      <AdminCampagnesPanel
+        lignes={lignes}
+        campagnesArchivees={campagnesArchivees}
+        lignesOptions={lignesOptions}
+      />
     </main>
   );
 }

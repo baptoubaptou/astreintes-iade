@@ -34,9 +34,9 @@ export async function genererPointsExcel(
   worksheet.addRow([]);
 
   const headers = [
-    "IADE",
-    ...overview.lignes.map((ligne) => ligne.nom),
+    "Nom",
     "Points cumulés",
+    ...overview.lignes.map((ligne) => ligne.nom),
   ];
   const headerRow = worksheet.addRow(headers);
   headerRow.font = { bold: true };
@@ -47,11 +47,11 @@ export async function genererPointsExcel(
     for (const iade of overview.iades) {
       const row = worksheet.addRow([
         `${iade.prenom} ${iade.nom}`,
-        ...iade.parLigne.map((ligne) => formatLigneCellComplet(ligne)),
         iade.pointsTotal,
+        ...iade.parLigne.map((ligne) => formatLigneCellComplet(ligne)),
       ]);
 
-      row.alignment = { wrapText: true, vertical: "top" };
+      row.alignment = { vertical: "top" };
     }
   }
 

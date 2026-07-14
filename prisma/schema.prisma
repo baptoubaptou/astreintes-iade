@@ -76,6 +76,12 @@ enum StatutFenetreGeneration {
   CONFIRMEE
 }
 
+enum StatutLotGeneration {
+  EN_ATTENTE_PUBLICATION
+  PUBLIE
+  ANNULE
+}
+
 enum TypeActionAudit {
   DISPONIBILITE_AJOUTEE
   DISPONIBILITE_SUPPRIMEE_MANUELLE
@@ -130,6 +136,7 @@ model LigneAstreinte {
   disponibilites        Disponibilite[]
   preferencesContinuite PreferenceContinuite[]
   fenetresGeneration    FenetreGeneration[]
+  lotsGeneration        LotGeneration[]
 }
 
 model PoidsCreneau {
@@ -183,9 +190,11 @@ model Astreinte {
   pointsAttribues Int
   publie          Boolean         @default(false)
   datePublication DateTime?
+  lotGenerationId String?
 
   ligne           LigneAstreinte   @relation(fields: [ligneId], references: [id])
   iade            Utilisateur      @relation(fields: [iadeId], references: [id], onDelete: Cascade)
+  lotGeneration   LotGeneration?   @relation(fields: [lotGenerationId], references: [id], onDelete: SetNull)
   demandesEchange DemandeEchange[]
   offresAstreinte OffreAstreinte[]
 
@@ -279,11 +288,32 @@ model FenetreGeneration {
   ligneId              String
   periodeDebut         DateTime
   periodeFin           DateTime
+  dateLimiteSaisieDispos DateTime
   dateGenerationPrevue DateTime
   statut               StatutFenetreGeneration @default(PLANIFIEE)
   dateConfirmation     DateTime?
+  archivee             Boolean                 @default(false)
+  dateArchivage        DateTime?
 
-  ligne LigneAstreinte @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+  ligne          LigneAstreinte  @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+  lotsGeneration LotGeneration[]
+}
+
+model LotGeneration {
+  id                  String              @id @default(cuid())
+  ligneId             String
+  periodeDebut        DateTime
+  periodeFin          DateTime
+  statut              StatutLotGeneration @default(EN_ATTENTE_PUBLICATION)
+  fenetreGenerationId String?
+  dateCreation        DateTime            @default(now())
+  datePublication     DateTime?
+
+  ligne             LigneAstreinte     @relation(fields: [ligneId], references: [id], onDelete: Cascade)
+  fenetreGeneration FenetreGeneration? @relation(fields: [fenetreGenerationId], references: [id], onDelete: SetNull)
+  astreintes        Astreinte[]
+
+  @@index([ligneId, statut])
 }
 
 model InscriptionEnAttente {

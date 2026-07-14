@@ -8,6 +8,7 @@ import { formatDateParam } from "../src/lib/calendar";
 import {
   calculerPeriodeEnvoi,
   calculerProchainEnvoiEtPeriode,
+  estDateDansPeriodeDejaEnvoyee,
 } from "../src/lib/envoi-automatique-periode";
 import {
   executerEnvoiAutomatiqueSiEcheance,
@@ -40,6 +41,39 @@ async function main() {
   }
 
   console.log("OK — calculerPeriodeEnvoi (lundi strictement après la date d'envoi).");
+
+  const dernierEnvoi = new Date(Date.UTC(2026, 6, 16));
+  if (
+    !estDateDansPeriodeDejaEnvoyee(
+      new Date(Date.UTC(2026, 6, 22)),
+      dernierEnvoi,
+      JourSemaine.JEUDI,
+    )
+  ) {
+    throw new Error("ÉCHEC : le 22/07 devrait être dans la période du dernier envoi.");
+  }
+
+  if (
+    !estDateDansPeriodeDejaEnvoyee(
+      new Date(Date.UTC(2026, 6, 15)),
+      dernierEnvoi,
+      JourSemaine.JEUDI,
+    )
+  ) {
+    throw new Error("ÉCHEC : le 15/07 devrait être dans la période de l'envoi précédent.");
+  }
+
+  if (
+    estDateDansPeriodeDejaEnvoyee(
+      new Date(Date.UTC(2026, 6, 27)),
+      dernierEnvoi,
+      JourSemaine.JEUDI,
+    )
+  ) {
+    throw new Error("ÉCHEC : le 27/07 ne devrait pas être couvert par les deux derniers envois.");
+  }
+
+  console.log("OK — détection période déjà envoyée (semaine en cours + suivante).");
 
   const jeudiRef = new Date(Date.UTC(2026, 6, 16));
   const apercu = calculerProchainEnvoiEtPeriode(JourSemaine.JEUDI, jeudiRef);

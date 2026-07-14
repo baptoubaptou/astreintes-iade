@@ -5,7 +5,7 @@ import {
   TypeCreneau,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { isIadeEligiblePourCreneau } from "@/server/astreinte-creneaux";
+import { isIadeQualifieSurLigne } from "@/server/disponibilites";
 import {
   calculerDateFermetureOffre,
   calculerFenetreBourse,
@@ -20,9 +20,12 @@ import {
 } from "@/server/notifications";
 import { calculerPointsCumules } from "@/server/points";
 import { LIBELLES_TYPE_CRENEAU_ASTREINTE } from "@/server/astreinte-creneaux";
+import { notifierSecretariatChangementBourse } from "@/server/notification-secretariat-bourse";
 
 export type BourseEligibiliteAstreinte = {
   peutDonner: boolean;
+  /** Offre déjà créée par l'IADE — affichage de confirmation, pas une erreur. */
+  offreOuverte?: boolean;
   message?: string;
   dureeFenetreHeures?: number;
   palier?: string;
@@ -33,12 +36,37 @@ export type OffreBourseItem = {
   id: string;
   astreinteId: string;
   date: string;
+  ligneId: string;
   ligneNom: string;
   typeCreneau: TypeCreneau;
   proposantNom: string;
   dateOuverture: string;
   dateFermeture: string;
   candidatureEnvoyee: boolean;
+};
+
+export type BourseCandidatSupervision = {
+  iadeId: string;
+  nom: string;
+  pointsCumules: number;
+  dateCandidature: string;
+  favori: boolean;
+};
+
+export type BourseSupervisionOffre = {
+  id: string;
+  astreinteId: string;
+  date: string;
+  ligneId: string;
+  ligneNom: string;
+  typeCreneau: TypeCreneau;
+  proposantNom: string;
+  dateOuverture: string;
+  dateFermeture: string;
+  candidats: BourseCandidatSupervision[];
+  favoriActuel: string | null;
+  exAequo: boolean;
+  sansCandidat: boolean;
 };
 
 function formatDateFr(date: Date): string {
@@ -75,7 +103,9 @@ export function evaluerEligibiliteDonBourse(
   if (options?.offreOuverteId) {
     return {
       peutDonner: false,
-      message: "Une offre est déjà ouverte pour cette astreinte.",
+      offreOuverte: true,
+      message:
+        "Offre ouverte — vos collègues qualifiés sur la ligne peuvent postuler dans la bourse.",
       offreOuverteId: options.offreOuverteId,
       dureeFenetreHeures: fenetre.dureeHeures,
       palier: fenetre.palier,
@@ -173,23 +203,70 @@ async function notifierSansCandidatBourse(input: {
   );
 }
 
-async function selectionnerRepreneur(
-  candidatures: Array<{ iadeId: string }>,
+async function projeterAttributionBourse(
+  candidatures: Array<{ iadeId: string; nom: string }>,
   annee: number,
-): Promise<string> {
+): Promise<{
+  candidats: Array<{
+    iadeId: string;
+    nom: string;
+    points: number;
+    favori: boolean;
+  }>;
+  favoriIds: string[];
+  exAequo: boolean;
+}> {
+  if (candidatures.length === 0) {
+    return { candidats: [], favoriIds: [], exAequo: false };
+  }
+
   const pointsEntries = await Promise.all(
     candidatures.map(async (candidature) => ({
       iadeId: candidature.iadeId,
+      nom: candidature.nom,
       points: await calculerPointsCumules(candidature.iadeId, annee),
     })),
   );
 
   const minPoints = Math.min(...pointsEntries.map((entry) => entry.points));
-  const exAequo = pointsEntries
+  const favoriIds = pointsEntries
     .filter((entry) => entry.points === minPoints)
     .map((entry) => entry.iadeId);
+  const favoriSet = new Set(favoriIds);
 
-  return exAequo.length === 1 ? exAequo[0]! : tirageAuSort(exAequo);
+  const candidats = [...pointsEntries]
+    .sort((a, b) => a.points - b.points || a.nom.localeCompare(b.nom, "fr"))
+    .map((entry) => ({
+      iadeId: entry.iadeId,
+      nom: entry.nom,
+      points: entry.points,
+      favori: favoriSet.has(entry.iadeId),
+    }));
+
+  return {
+    candidats,
+    favoriIds,
+    exAequo: favoriIds.length > 1,
+  };
+}
+
+async function selectionnerRepreneur(
+  candidatures: Array<{ iadeId: string }>,
+  annee: number,
+): Promise<string> {
+  const projection = await projeterAttributionBourse(
+    candidatures.map((candidature) => ({
+      iadeId: candidature.iadeId,
+      nom: candidature.iadeId,
+    })),
+    annee,
+  );
+
+  if (projection.favoriIds.length === 1) {
+    return projection.favoriIds[0]!;
+  }
+
+  return tirageAuSort(projection.favoriIds);
 }
 
 export async function traiterOffresBourseExpirees(
@@ -263,6 +340,14 @@ export async function traiterOffresBourseExpirees(
         ligneNom: offre.astreinte.ligne.nom,
         typeCreneau: offre.astreinte.typeCreneau,
       },
+    });
+
+    await notifierSecretariatChangementBourse({
+      astreinteId: offre.astreinteId,
+      date: offre.astreinte.date,
+      ligneNom: offre.astreinte.ligne.nom,
+      donneur: offre.proposant,
+      repreneur,
     });
   }
 
@@ -357,17 +442,14 @@ export async function postulerOffreBourse(
     return { error: "Vous avez déjà postulé à cette offre." };
   }
 
-  const eligible = await isIadeEligiblePourCreneau(
+  const qualifie = await isIadeQualifieSurLigne(
     iadeId,
     offre.astreinte.ligneId,
-    offre.astreinte.date,
-    offre.astreinte.typeCreneau,
   );
 
-  if (!eligible) {
+  if (!qualifie) {
     return {
-      error:
-        "Vous devez être qualifié et disponible sur cette ligne et ce créneau.",
+      error: "Vous devez être qualifié sur cette ligne pour postuler.",
     };
   }
 
@@ -397,7 +479,7 @@ export async function getOffresBoursePourIade(
     include: {
       astreinte: {
         include: {
-          ligne: { select: { nom: true } },
+          ligne: { select: { id: true, nom: true } },
         },
       },
       proposant: { select: { prenom: true, nom: true } },
@@ -412,14 +494,12 @@ export async function getOffresBoursePourIade(
   const items: OffreBourseItem[] = [];
 
   for (const offre of offres) {
-    const eligible = await isIadeEligiblePourCreneau(
+    const qualifie = await isIadeQualifieSurLigne(
       iadeId,
       offre.astreinte.ligneId,
-      offre.astreinte.date,
-      offre.astreinte.typeCreneau,
     );
 
-    if (!eligible) {
+    if (!qualifie) {
       continue;
     }
 
@@ -427,12 +507,91 @@ export async function getOffresBoursePourIade(
       id: offre.id,
       astreinteId: offre.astreinteId,
       date: offre.astreinte.date.toISOString().slice(0, 10),
+      ligneId: offre.astreinte.ligne.id,
       ligneNom: offre.astreinte.ligne.nom,
       typeCreneau: offre.astreinte.typeCreneau,
       proposantNom: formatIadeNom(offre.proposant),
       dateOuverture: offre.dateOuverture.toISOString(),
       dateFermeture: offre.dateFermeture.toISOString(),
       candidatureEnvoyee: offre.candidatures.length > 0,
+    });
+  }
+
+  return items;
+}
+
+export async function getSupervisionBourseCadre(): Promise<BourseSupervisionOffre[]> {
+  await traiterOffresBourseExpirees();
+
+  const offres = await prisma.offreAstreinte.findMany({
+    where: {
+      statut: StatutOffreAstreinte.OUVERTE,
+      astreinte: {
+        statut: { not: StatutAstreinte.ANNULEE },
+      },
+    },
+    include: {
+      astreinte: {
+        include: {
+          ligne: { select: { id: true, nom: true } },
+        },
+      },
+      proposant: { select: { prenom: true, nom: true } },
+      candidatures: {
+        include: {
+          iade: { select: { id: true, prenom: true, nom: true } },
+        },
+        orderBy: { dateCandidature: "asc" },
+      },
+    },
+    orderBy: { dateFermeture: "asc" },
+  });
+
+  const items: BourseSupervisionOffre[] = [];
+
+  for (const offre of offres) {
+    const annee = normalizeUtcDay(offre.astreinte.date).getUTCFullYear();
+    const candidaturesPourProjection = offre.candidatures.map((candidature) => ({
+      iadeId: candidature.iade.id,
+      nom: formatIadeNom(candidature.iade),
+    }));
+
+    const projection = await projeterAttributionBourse(
+      candidaturesPourProjection,
+      annee,
+    );
+
+    const favoriNoms = projection.candidats
+      .filter((candidat) => candidat.favori)
+      .map((candidat) => candidat.nom);
+
+    items.push({
+      id: offre.id,
+      astreinteId: offre.astreinteId,
+      date: offre.astreinte.date.toISOString().slice(0, 10),
+      ligneId: offre.astreinte.ligne.id,
+      ligneNom: offre.astreinte.ligne.nom,
+      typeCreneau: offre.astreinte.typeCreneau,
+      proposantNom: formatIadeNom(offre.proposant),
+      dateOuverture: offre.dateOuverture.toISOString(),
+      dateFermeture: offre.dateFermeture.toISOString(),
+      candidats: offre.candidatures.map((candidature) => {
+        const candidatProjection = projection.candidats.find(
+          (entry) => entry.iadeId === candidature.iade.id,
+        );
+
+        return {
+          iadeId: candidature.iade.id,
+          nom: formatIadeNom(candidature.iade),
+          pointsCumules: candidatProjection?.points ?? 0,
+          dateCandidature: candidature.dateCandidature.toISOString(),
+          favori: candidatProjection?.favori ?? false,
+        };
+      }),
+      favoriActuel:
+        favoriNoms.length > 0 ? favoriNoms.join(", ") : null,
+      exAequo: projection.exAequo,
+      sansCandidat: offre.candidatures.length === 0,
     });
   }
 

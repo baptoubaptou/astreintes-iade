@@ -2,13 +2,11 @@ import {
   StatutAstreinte,
   StatutFenetreGeneration,
   TypeActionAudit,
-  TypePreferenceContinuite,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { parseDateInput } from "@/server/astreintes";
-import { LIBELLES_TYPE_CRENEAU_ASTREINTE } from "@/server/astreinte-creneaux";
 import { journaliser } from "@/server/audit";
-import { cleanupPreferencesAfterDisponibiliteDelete } from "@/server/disponibilites";
+import { nettoyerDisponibilitesApresAffectationLigne } from "@/server/nettoyage-disponibilites-apres-affectation";
 import { compterAstreintesNonPubliees } from "@/server/publication-planning";
 
 export const LIBELLES_STATUT_FENETRE: Record<StatutFenetreGeneration, string> = {
@@ -26,9 +24,12 @@ export type CampagneItem = {
   ordrePriorite: number;
   periodeDebut: string;
   periodeFin: string;
+  dateLimiteSaisieDispos: string;
   dateGenerationPrevue: string;
   statut: StatutFenetreGeneration;
   dateConfirmation: string | null;
+  archivee: boolean;
+  dateArchivage: string | null;
   modifiable: boolean;
   confirmable: boolean;
   publiable: boolean;
@@ -69,9 +70,12 @@ function mapFenetre(
     ligneId: string;
     periodeDebut: Date;
     periodeFin: Date;
+    dateLimiteSaisieDispos: Date;
     dateGenerationPrevue: Date;
     statut: StatutFenetreGeneration;
     dateConfirmation: Date | null;
+    archivee: boolean;
+    dateArchivage: Date | null;
   },
   ligne: { nom: string; ordrePriorite: number },
   options?: {
@@ -86,14 +90,20 @@ function mapFenetre(
     ordrePriorite: ligne.ordrePriorite,
     periodeDebut: formatDateIso(fenetre.periodeDebut),
     periodeFin: formatDateIso(fenetre.periodeFin),
+    dateLimiteSaisieDispos: formatDateIso(fenetre.dateLimiteSaisieDispos),
     dateGenerationPrevue: formatDateIso(fenetre.dateGenerationPrevue),
     statut: fenetre.statut,
     dateConfirmation: fenetre.dateConfirmation
       ? formatDateIso(fenetre.dateConfirmation)
       : null,
-    modifiable: fenetre.statut !== StatutFenetreGeneration.CONFIRMEE,
-    confirmable: options?.confirmable ?? false,
-    publiable: (options?.nonPublieesCount ?? 0) > 0,
+    archivee: fenetre.archivee,
+    dateArchivage: fenetre.dateArchivage
+      ? formatDateIso(fenetre.dateArchivage)
+      : null,
+    modifiable:
+      !fenetre.archivee && fenetre.statut !== StatutFenetreGeneration.CONFIRMEE,
+    confirmable: !fenetre.archivee && (options?.confirmable ?? false),
+    publiable: !fenetre.archivee && (options?.nonPublieesCount ?? 0) > 0,
     nonPublieesCount: options?.nonPublieesCount ?? 0,
   };
 }
@@ -158,7 +168,10 @@ export async function listLignesCampagneOptions(): Promise<LigneCampagneOption[]
   });
 }
 
-export async function listCampagnesParLigne(): Promise<CampagneLigneRow[]> {
+export async function listCampagnesParLigne(options?: {
+  archivee?: boolean;
+}): Promise<CampagneLigneRow[]> {
+  const archivee = options?.archivee ?? false;
   const today = startOfTodayUtc();
 
   const lignes = await prisma.ligneAstreinte.findMany({
@@ -166,7 +179,9 @@ export async function listCampagnesParLigne(): Promise<CampagneLigneRow[]> {
     orderBy: [{ ordrePriorite: "asc" }, { nom: "asc" }],
     include: {
       fenetresGeneration: {
-        where: { periodeFin: { gte: today } },
+        where: archivee
+          ? { archivee: true }
+          : { archivee: false, periodeFin: { gte: today } },
         orderBy: [
           { dateGenerationPrevue: "asc" },
           { periodeDebut: "asc" },
@@ -220,7 +235,7 @@ export async function listCampagnesParLigne(): Promise<CampagneLigneRow[]> {
 }
 
 export async function getCampagnesResume(): Promise<CampagneItem[]> {
-  const lignes = await listCampagnesParLigne();
+  const lignes = await listCampagnesParLigne({ archivee: false });
 
   return lignes
     .flatMap((ligne) => ligne.campagnes)
@@ -237,6 +252,7 @@ type CampagneInput = {
   ligneId: string;
   periodeDebut: Date;
   periodeFin: Date;
+  dateLimiteSaisieDispos: Date;
   dateGenerationPrevue: Date;
 };
 
@@ -253,6 +269,10 @@ function validateCampagneInput(body: Record<string, unknown>):
     typeof body.dateGenerationPrevue === "string"
       ? body.dateGenerationPrevue.trim()
       : "";
+  const dateLimiteSaisieStr =
+    typeof body.dateLimiteSaisieDispos === "string"
+      ? body.dateLimiteSaisieDispos.trim()
+      : "";
 
   if (!ligneId) {
     return { error: "La ligne est obligatoire.", field: "ligneId" };
@@ -261,6 +281,7 @@ function validateCampagneInput(body: Record<string, unknown>):
   const periodeDebut = parseDateInput(periodeDebutStr);
   const periodeFin = parseDateInput(periodeFinStr);
   const dateGenerationPrevue = parseDateInput(dateGenerationStr);
+  const dateLimiteSaisieDispos = parseDateInput(dateLimiteSaisieStr);
 
   if (!periodeDebut) {
     return {
@@ -280,10 +301,25 @@ function validateCampagneInput(body: Record<string, unknown>):
     };
   }
 
+  if (!dateLimiteSaisieDispos) {
+    return {
+      error: "Date limite de saisie des disponibilités invalide.",
+      field: "dateLimiteSaisieDispos",
+    };
+  }
+
   if (periodeFin < periodeDebut) {
     return {
       error: "La fin de période doit être postérieure ou égale au début.",
       field: "periodeFin",
+    };
+  }
+
+  if (dateLimiteSaisieDispos > dateGenerationPrevue) {
+    return {
+      error:
+        "La date limite de saisie des disponibilités doit être antérieure ou égale à la date de génération prévue.",
+      field: "dateLimiteSaisieDispos",
     };
   }
 
@@ -292,6 +328,7 @@ function validateCampagneInput(body: Record<string, unknown>):
       ligneId,
       periodeDebut,
       periodeFin,
+      dateLimiteSaisieDispos,
       dateGenerationPrevue,
     },
   };
@@ -330,6 +367,7 @@ export async function createFenetreGeneration(
       ligneId: validated.data.ligneId,
       periodeDebut: validated.data.periodeDebut,
       periodeFin: validated.data.periodeFin,
+      dateLimiteSaisieDispos: validated.data.dateLimiteSaisieDispos,
       dateGenerationPrevue: validated.data.dateGenerationPrevue,
       statut: StatutFenetreGeneration.PLANIFIEE,
     },
@@ -360,11 +398,17 @@ export async function updateFenetreGeneration(
 
   const existing = await prisma.fenetreGeneration.findUnique({
     where: { id },
-    select: { id: true, statut: true },
+    select: { id: true, statut: true, archivee: true },
   });
 
   if (!existing) {
     return { error: "Campagne introuvable." };
+  }
+
+  if (existing.archivee) {
+    return {
+      error: "Une campagne archivée ne peut pas être modifiée.",
+    };
   }
 
   if (existing.statut === StatutFenetreGeneration.CONFIRMEE) {
@@ -390,6 +434,7 @@ export async function updateFenetreGeneration(
       ligneId: validated.data.ligneId,
       periodeDebut: validated.data.periodeDebut,
       periodeFin: validated.data.periodeFin,
+      dateLimiteSaisieDispos: validated.data.dateLimiteSaisieDispos,
       dateGenerationPrevue: validated.data.dateGenerationPrevue,
     },
     include: {
@@ -460,90 +505,20 @@ export async function confirmerCampagne(
   let preferencesSupprimees = 0;
 
   await prisma.$transaction(async (tx) => {
-    for (const astreinte of astreintes) {
-      const autresLignes = await tx.qualification.findMany({
-        where: {
-          iadeId: astreinte.iadeId,
-          ligneId: { not: fenetre.ligneId },
-          ligne: { actif: true },
-        },
-        include: {
-          ligne: { select: { id: true, nom: true } },
-        },
-      });
+    const { result, journals } = await nettoyerDisponibilitesApresAffectationLigne(
+      {
+        ligneOrigineId: fenetre.ligneId,
+        ligneOrigineNom: fenetre.ligne.nom,
+        astreintes,
+        motifJournal: `suite à confirmation de la campagne ${fenetre.ligne.nom}.`,
+        detailJournal: { fenetreId: fenetre.id },
+      },
+      tx,
+    );
 
-      if (autresLignes.length === 0) {
-        continue;
-      }
-
-      const disponibilites = await tx.disponibilite.findMany({
-        where: {
-          iadeId: astreinte.iadeId,
-          date: astreinte.date,
-          typeCreneau: astreinte.typeCreneau,
-          ligneId: { in: autresLignes.map((entry) => entry.ligneId) },
-        },
-        include: {
-          ligne: { select: { nom: true } },
-        },
-      });
-
-      for (const disponibilite of disponibilites) {
-        await tx.disponibilite.delete({ where: { id: disponibilite.id } });
-        disponibilitesSupprimees += 1;
-
-        const creneauLabel =
-          LIBELLES_TYPE_CRENEAU_ASTREINTE[astreinte.typeCreneau];
-        const dateLabel = formatDateFrCourt(astreinte.date);
-
-        pendingJournals.push({
-          typeAction: TypeActionAudit.DISPONIBILITE_SUPPRIMEE_AUTO,
-          iadeConcerneId: astreinte.iadeId,
-          resume: `Disponibilité retirée sur ${disponibilite.ligne.nom} (${creneauLabel}, ${dateLabel}) suite à confirmation de la campagne ${fenetre.ligne.nom}.`,
-          detail: {
-            fenetreId: fenetre.id,
-            ligneOrigineId: fenetre.ligneId,
-            ligneOrigineNom: fenetre.ligne.nom,
-            ligneImpacteeId: disponibilite.ligneId,
-            ligneImpacteeNom: disponibilite.ligne.nom,
-            date: formatDateIso(astreinte.date),
-            typeCreneau: astreinte.typeCreneau,
-            disponibiliteId: disponibilite.id,
-          },
-        });
-
-        const prefsSupprimees = await cleanupPreferencesAfterDisponibiliteDelete(
-          astreinte.iadeId,
-          disponibilite.ligneId,
-          disponibilite.date,
-          disponibilite.typeCreneau,
-          tx,
-        );
-
-        for (const preference of prefsSupprimees) {
-          preferencesSupprimees += 1;
-          const prefLabel =
-            preference.type === TypePreferenceContinuite.WEEKEND_48H
-              ? "week-end complet (48h)"
-              : "24h";
-
-          pendingJournals.push({
-            typeAction: TypeActionAudit.PREFERENCE_SUPPRIMEE,
-            iadeConcerneId: astreinte.iadeId,
-            resume: `Préférence ${prefLabel} retirée sur ${disponibilite.ligne.nom} (${formatDateFrCourt(preference.dateDebut)}) suite à confirmation de la campagne ${fenetre.ligne.nom}.`,
-            detail: {
-              fenetreId: fenetre.id,
-              ligneOrigineId: fenetre.ligneId,
-              ligneOrigineNom: fenetre.ligne.nom,
-              ligneImpacteeId: preference.ligneId,
-              preferenceId: preference.id,
-              type: preference.type,
-              dateDebut: formatDateIso(preference.dateDebut),
-            },
-          });
-        }
-      }
-    }
+    disponibilitesSupprimees = result.disponibilitesSupprimees;
+    preferencesSupprimees = result.preferencesSupprimees;
+    pendingJournals.push(...journals);
 
     await tx.fenetreGeneration.update({
       where: { id: fenetreId },
@@ -590,5 +565,45 @@ export async function confirmerCampagne(
     }),
     disponibilitesSupprimees,
     preferencesSupprimees,
+  };
+}
+
+export async function setCampagneArchivee(
+  fenetreId: string,
+  archivee: boolean,
+): Promise<{ campagne: CampagneItem } | { error: string }> {
+  const existing = await prisma.fenetreGeneration.findUnique({
+    where: { id: fenetreId },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    return { error: "Campagne introuvable." };
+  }
+
+  const fenetre = await prisma.fenetreGeneration.update({
+    where: { id: fenetreId },
+    data: {
+      archivee,
+      dateArchivage: archivee ? new Date() : null,
+    },
+    include: {
+      ligne: { select: { nom: true, ordrePriorite: true } },
+    },
+  });
+
+  const nonPublieesCount = archivee
+    ? 0
+    : await compterAstreintesNonPubliees({
+        ligneId: fenetre.ligneId,
+        periodeDebut: fenetre.periodeDebut,
+        periodeFin: fenetre.periodeFin,
+      });
+
+  return {
+    campagne: mapFenetre(fenetre, fenetre.ligne, {
+      confirmable: archivee ? false : await campagneEstConfirmable(fenetre.id),
+      nonPublieesCount,
+    }),
   };
 }

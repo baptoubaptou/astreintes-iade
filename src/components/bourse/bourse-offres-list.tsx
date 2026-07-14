@@ -4,10 +4,21 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { OffreBourseItem } from "@/server/bourse-astreintes";
 import { LIBELLES_TYPE_CRENEAU_ASTREINTE } from "@/server/astreinte-creneaux";
+import { getLigneColorClass } from "@/lib/ligne-colors";
 
 type BourseOffresListProps = {
   offres: OffreBourseItem[];
 };
+
+function formatDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
 
 function formatDateTime(iso: string) {
   return new Intl.DateTimeFormat("fr-FR", {
@@ -26,9 +37,14 @@ export function BourseOffresList({ offres }: BourseOffresListProps) {
 
   if (offres.length === 0) {
     return (
-      <p className="text-sm text-zinc-600">
-        Aucune offre ouverte pour le moment.
-      </p>
+      <div className="space-y-2 text-sm text-zinc-600">
+        <p>Aucune offre ouverte pour le moment.</p>
+        <p>
+          Vos propres offres n&apos;apparaissent pas ici. Seuls les collègues{" "}
+          <strong>qualifiés sur la ligne</strong> voient les offres des autres et
+          peuvent postuler (sans condition de disponibilité déclarée).
+        </p>
+      </div>
     );
   }
 
@@ -74,10 +90,13 @@ export function BourseOffresList({ offres }: BourseOffresListProps) {
             className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
           >
             <div>
-              <p className="font-medium">
-                {offre.ligneNom} — {offre.date}
-              </p>
-              <p className="text-sm text-zinc-600">
+              <p className="font-medium">{formatDate(offre.date)}</p>
+              <span
+                className={`mt-1 inline-block rounded border px-2 py-0.5 text-xs font-medium ${getLigneColorClass(offre.ligneId, offre.ligneNom)}`}
+              >
+                {offre.ligneNom}
+              </span>
+              <p className="mt-1 text-sm text-zinc-600">
                 {LIBELLES_TYPE_CRENEAU_ASTREINTE[offre.typeCreneau]} · Proposée
                 par {offre.proposantNom}
               </p>

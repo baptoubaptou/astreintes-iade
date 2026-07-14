@@ -16,6 +16,16 @@ export function DonnerAstreinteButton({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  if (eligibilite.offreOuverte || success) {
+    return (
+      <p className="max-w-xs text-sm text-green-800">
+        {eligibilite.message ??
+          "Offre ouverte — vos collègues peuvent postuler dans la bourse."}
+      </p>
+    );
+  }
 
   if (!eligibilite.peutDonner) {
     return (
@@ -47,6 +57,7 @@ export function DonnerAstreinteButton({
         return;
       }
 
+      setSuccess(true);
       router.refresh();
     } catch {
       setError("Impossible de contacter le serveur.");

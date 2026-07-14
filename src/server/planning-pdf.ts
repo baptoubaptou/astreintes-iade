@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
-import type { TypeCreneau } from "@prisma/client";
 import { formatDateParam } from "@/lib/calendar";
-import { LIBELLES_TYPE_CRENEAU_ASTREINTE } from "@/server/astreinte-creneaux";
+import { getLignePdfColors } from "@/lib/ligne-colors";
+import { libelleCourtCreneau } from "@/server/astreinte-creneaux";
 import {
   getActiveLignesOptions,
   listAstreintes,
@@ -12,32 +12,20 @@ import {
 } from "@/server/astreintes";
 
 const MARGIN = 50;
-const COL_DATE = 75;
-const COL_JOUR = 95;
-const COL_CRENEAU = 130;
-const COL_IADE = 195;
-const ROW_HEIGHT = 18;
+const COL_ASTREINTE = 130;
+const COL_JOUR_NUIT = 50;
+const COL_IADE = 220;
+const TABLE_WIDTH = COL_ASTREINTE + COL_JOUR_NUIT + COL_IADE;
+const ROW_HEIGHT = 20;
 const HEADER_ROW_HEIGHT = 20;
+const DAY_HEADER_HEIGHT = 26;
+const DAY_PADDING = 6;
+const DAY_BLOCK_GAP = 14;
+const DAY_BLOCK_INSET = 4;
 
 function parseDateUtc(date: string): Date {
   const [year, month, day] = date.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day));
-}
-
-function formatJourSemaine(date: string): string {
-  return new Intl.DateTimeFormat("fr-FR", {
-    weekday: "long",
-    timeZone: "UTC",
-  }).format(parseDateUtc(date));
-}
-
-function formatDateCourte(date: string): string {
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(parseDateUtc(date));
 }
 
 function formatDateGeneration(date: Date): string {
@@ -59,29 +47,49 @@ function slugify(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function groupAstreintesParLigne(
+function ordreLigneIndex(
+  ligneId: string,
+  ordreLignes: Array<{ id: string }>,
+): number {
+  const index = ordreLignes.findIndex((ligne) => ligne.id === ligneId);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function trierAstreintesPourPdf(
   astreintes: AstreinteListItem[],
   ordreLignes: Array<{ id: string; nom: string }>,
-): Map<string, { ligneNom: string; astreintes: AstreinteListItem[] }> {
-  const map = new Map<string, { ligneNom: string; astreintes: AstreinteListItem[] }>();
+): AstreinteListItem[] {
+  return [...astreintes].sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date);
+    if (dateCompare !== 0) {
+      return dateCompare;
+    }
 
-  for (const ligne of ordreLignes) {
-    map.set(ligne.id, { ligneNom: ligne.nom, astreintes: [] });
-  }
+    const ligneCompare =
+      ordreLigneIndex(a.ligne.id, ordreLignes) -
+      ordreLigneIndex(b.ligne.id, ordreLignes);
+    if (ligneCompare !== 0) {
+      return ligneCompare;
+    }
+
+    return a.typeCreneau.localeCompare(b.typeCreneau);
+  });
+}
+
+function groupAstreintesParDate(
+  astreintes: AstreinteListItem[],
+): Array<{ date: string; astreintes: AstreinteListItem[] }> {
+  const map = new Map<string, AstreinteListItem[]>();
 
   for (const astreinte of astreintes) {
-    const groupe = map.get(astreinte.ligne.id);
-    if (groupe) {
-      groupe.astreintes.push(astreinte);
-    } else {
-      map.set(astreinte.ligne.id, {
-        ligneNom: astreinte.ligne.nom,
-        astreintes: [astreinte],
-      });
-    }
+    const liste = map.get(astreinte.date) ?? [];
+    liste.push(astreinte);
+    map.set(astreinte.date, liste);
   }
 
-  return map;
+  return [...map.entries()]
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, groupe]) => ({ date, astreintes: groupe }));
 }
 
 function ensureSpace(doc: InstanceType<typeof PDFDocument>, needed: number): void {
@@ -91,17 +99,63 @@ function ensureSpace(doc: InstanceType<typeof PDFDocument>, needed: number): voi
   }
 }
 
-function drawTableHeader(doc: InstanceType<typeof PDFDocument>, x: number): void {
+function formatDateSection(date: string): string {
+  const formatted = new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(parseDateUtc(date));
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+function getDaySectionStyle(date: string, sectionIndex: number): {
+  blockBg: string;
+  blockBorder: string;
+  headerBg: string;
+} {
+  const dayOfWeek = parseDateUtc(date).getUTCDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+  if (isWeekend) {
+    return {
+      blockBg: "#fffbeb",
+      blockBorder: "#fbbf24",
+      headerBg: "#b45309",
+    };
+  }
+
+  return sectionIndex % 2 === 0
+    ? {
+        blockBg: "#f8fafc",
+        blockBorder: "#cbd5e1",
+        headerBg: "#334155",
+      }
+    : {
+        blockBg: "#ffffff",
+        blockBorder: "#94a3b8",
+        headerBg: "#1e293b",
+      };
+}
+
+function drawTableHeader(
+  doc: InstanceType<typeof PDFDocument>,
+  x: number,
+  blockBg: string,
+): void {
   const y = doc.y;
-  doc.font("Helvetica-Bold").fontSize(9);
-  doc.text("Date", x, y, { width: COL_DATE });
-  doc.text("Jour", x + COL_DATE, y, { width: COL_JOUR });
-  doc.text("Créneau", x + COL_DATE + COL_JOUR, y, { width: COL_CRENEAU });
-  doc.text("IADE", x + COL_DATE + COL_JOUR + COL_CRENEAU, y, { width: COL_IADE });
+  doc.rect(x, y, TABLE_WIDTH, HEADER_ROW_HEIGHT).fill(blockBg);
+  doc.font("Helvetica-Bold").fontSize(9).fillColor("#475569");
+  doc.text("Astreinte", x + 8, y + 5, { width: COL_ASTREINTE - 8 });
+  doc.text("Créneau", x + COL_ASTREINTE, y + 5, { width: COL_JOUR_NUIT });
+  doc.text("IADE", x + COL_ASTREINTE + COL_JOUR_NUIT, y + 5, { width: COL_IADE });
   doc
-    .moveTo(x, y + HEADER_ROW_HEIGHT - 4)
-    .lineTo(x + COL_DATE + COL_JOUR + COL_CRENEAU + COL_IADE, y + HEADER_ROW_HEIGHT - 4)
-    .strokeColor("#cccccc")
+    .moveTo(x, y + HEADER_ROW_HEIGHT)
+    .lineTo(x + TABLE_WIDTH, y + HEADER_ROW_HEIGHT)
+    .strokeColor("#cbd5e1")
+    .lineWidth(0.5)
     .stroke();
   doc.y = y + HEADER_ROW_HEIGHT;
   doc.font("Helvetica").fontSize(9);
@@ -113,22 +167,88 @@ function drawAstreinteRow(
   astreinte: AstreinteListItem,
 ): void {
   ensureSpace(doc, ROW_HEIGHT);
+  const colors = getLignePdfColors(astreinte.ligne.id, astreinte.ligne.nom);
   const y = doc.y;
-  doc.text(formatDateCourte(astreinte.date), x, y, { width: COL_DATE });
-  doc.text(formatJourSemaine(astreinte.date), x + COL_DATE, y, { width: COL_JOUR });
-  doc.text(
-    LIBELLES_TYPE_CRENEAU_ASTREINTE[astreinte.typeCreneau as TypeCreneau],
-    x + COL_DATE + COL_JOUR,
-    y,
-    { width: COL_CRENEAU },
-  );
-  doc.text(
-    `${astreinte.iade.prenom} ${astreinte.iade.nom}`,
-    x + COL_DATE + COL_JOUR + COL_CRENEAU,
-    y,
-    { width: COL_IADE },
-  );
+  const creneau = libelleCourtCreneau(astreinte.typeCreneau);
+
+  doc.rect(x, y, TABLE_WIDTH, ROW_HEIGHT).fill(colors.rowBg);
+  doc.rect(x, y, 4, ROW_HEIGHT).fill(colors.accent);
+
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(9)
+    .fillColor(colors.rowText)
+    .text(astreinte.ligne.nom, x + 10, y + 5, { width: COL_ASTREINTE - 10 });
+
+  doc
+    .font("Helvetica")
+    .fillColor(creneau === "Nuit" ? "#1e293b" : "#475569")
+    .text(creneau, x + COL_ASTREINTE, y + 5, { width: COL_JOUR_NUIT });
+
+  doc
+    .fillColor("#111827")
+    .text(
+      `${astreinte.iade.prenom} ${astreinte.iade.nom}`,
+      x + COL_ASTREINTE + COL_JOUR_NUIT,
+      y + 5,
+      { width: COL_IADE },
+    );
+
   doc.y = y + ROW_HEIGHT;
+}
+
+function drawDaySection(
+  doc: InstanceType<typeof PDFDocument>,
+  x: number,
+  groupe: { date: string; astreintes: AstreinteListItem[] },
+  sectionIndex: number,
+): void {
+  const styles = getDaySectionStyle(groupe.date, sectionIndex);
+  const blockHeight =
+    DAY_HEADER_HEIGHT +
+    DAY_PADDING +
+    HEADER_ROW_HEIGHT +
+    groupe.astreintes.length * ROW_HEIGHT +
+    DAY_PADDING;
+
+  ensureSpace(doc, blockHeight + DAY_BLOCK_GAP);
+
+  const blockX = x - DAY_BLOCK_INSET;
+  const blockY = doc.y;
+  const blockWidth = TABLE_WIDTH + DAY_BLOCK_INSET * 2;
+
+  doc
+    .roundedRect(blockX, blockY, blockWidth, blockHeight, 4)
+    .fill(styles.blockBg);
+  doc
+    .roundedRect(blockX, blockY, blockWidth, blockHeight, 4)
+    .lineWidth(0.75)
+    .strokeColor(styles.blockBorder)
+    .stroke();
+
+  doc
+    .roundedRect(blockX, blockY, blockWidth, DAY_HEADER_HEIGHT, 4)
+    .fill(styles.headerBg);
+  doc
+    .rect(blockX, blockY + DAY_HEADER_HEIGHT - 4, blockWidth, 4)
+    .fill(styles.headerBg);
+
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(11)
+    .fillColor("#ffffff")
+    .text(formatDateSection(groupe.date), x, blockY + 7, { width: TABLE_WIDTH });
+
+  doc.y = blockY + DAY_HEADER_HEIGHT + DAY_PADDING;
+  doc.fillColor("#000000");
+
+  drawTableHeader(doc, x, styles.blockBg);
+
+  for (const astreinte of groupe.astreintes) {
+    drawAstreinteRow(doc, x, astreinte);
+  }
+
+  doc.y = blockY + blockHeight + DAY_BLOCK_GAP;
 }
 
 function addFooters(doc: InstanceType<typeof PDFDocument>, generatedAt: Date): void {
@@ -166,10 +286,11 @@ async function buildPlanningPdfBuffer(options: {
   lignesLabel: string;
   filename: string;
 }): Promise<{ buffer: Buffer; filename: string }> {
-  const groupes = groupAstreintesParLigne(
+  const astreintesTriees = trierAstreintesPourPdf(
     options.astreintes,
     options.lignesFiltrees,
   );
+  const groupesParDate = groupAstreintesParDate(astreintesTriees);
   const generatedAt = new Date();
 
   const buffer = await new Promise<Buffer>((resolve, reject) => {
@@ -204,37 +325,13 @@ async function buildPlanningPdfBuffer(options: {
     const tableX = MARGIN;
     let sectionCount = 0;
 
-    for (const ligne of options.lignesFiltrees) {
-      const groupe = groupes.get(ligne.id);
-      if (!groupe) {
+    for (const groupe of groupesParDate) {
+      if (groupe.astreintes.length === 0) {
         continue;
       }
 
       sectionCount += 1;
-      ensureSpace(doc, 60);
-
-      if (sectionCount > 1) {
-        doc.moveDown(0.5);
-      }
-
-      doc.font("Helvetica-Bold").fontSize(11).text(groupe.ligneNom);
-      doc.moveDown(0.3);
-
-      if (groupe.astreintes.length === 0) {
-        doc.font("Helvetica").fontSize(9).fillColor("#666666");
-        doc.text("Aucune astreinte publiée sur cette période.");
-        doc.fillColor("#000000");
-        doc.moveDown(0.5);
-        continue;
-      }
-
-      drawTableHeader(doc, tableX);
-
-      for (const astreinte of groupe.astreintes) {
-        drawAstreinteRow(doc, tableX, astreinte);
-      }
-
-      doc.moveDown(0.5);
+      drawDaySection(doc, tableX, groupe, sectionCount - 1);
     }
 
     if (sectionCount === 0) {

@@ -29,6 +29,11 @@ export function AdminEnvoiAutomatiquePanel({
     [jourEnvoi],
   );
 
+  const apercuPdfUrl = useMemo(() => {
+    const params = new URLSearchParams({ jourEnvoi });
+    return `/api/admin/envoi-automatique/apercu-pdf?${params.toString()}`;
+  }, [jourEnvoi]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -122,6 +127,18 @@ export function AdminEnvoiAutomatiquePanel({
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
         <p className="font-medium">Aperçu de la prochaine échéance</p>
         <p className="mt-1">{apercu.libelle}</p>
+        <p className="mt-2 text-xs text-blue-800">
+          Le PDF joint contient uniquement les astreintes{" "}
+          <strong>publiées</strong> sur la période indiquée.
+        </p>
+        <a
+          href={apercuPdfUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm font-medium text-blue-900 hover:bg-blue-100"
+        >
+          Aperçu du PDF secrétariat
+        </a>
         {!actif ? (
           <p className="mt-2 text-xs text-blue-800">
             L&apos;envoi automatique est désactivé : aucun e-mail ne sera

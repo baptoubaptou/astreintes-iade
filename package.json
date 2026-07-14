@@ -16,7 +16,9 @@
     "test:bourse-notifications": "tsx scripts/test-bourse-notifications.ts",
     "test:algo-lisse": "tsx scripts/test-algorithme-lisse.ts",
     "cron:quotidien": "tsx scripts/cron-taches-quotidiennes.ts",
-    "seed:dispos-juillet-aout": "tsx scripts/seed-disponibilites-juillet-aout.ts"
+    "seed:dispos-juillet-aout": "tsx scripts/seed-disponibilites-juillet-aout.ts",
+    "seed:dispos-oct-nov-dec": "tsx scripts/seed-disponibilites-octobre-novembre-decembre.ts",
+    "import:classeur": "tsx scripts/import-classeur-astreintes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertCadreApi } from "@/server/assert-cadre-api";
+import { getErreurDateDebutCalendrierPublie } from "@/server/calendrier-publie";
+import { getErreurVerrouSimulationParAstreinte } from "@/server/lot-generation";
 import {
   executerSimulationPlanning,
   parsePeriodeInput,
@@ -27,10 +29,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: periode.error }, { status: 400 });
   }
 
+  const ligneId =
+    typeof body.ligneId === "string" && body.ligneId.trim()
+      ? body.ligneId.trim()
+      : undefined;
+
+  const erreurVerrou = await getErreurVerrouSimulationParAstreinte(ligneId);
+  if (erreurVerrou) {
+    return NextResponse.json({ error: erreurVerrou }, { status: 409 });
+  }
+
+  const erreurCalendrier = await getErreurDateDebutCalendrierPublie(
+    periode.dateDebut,
+    ligneId,
+  );
+  if (erreurCalendrier) {
+    return NextResponse.json({ error: erreurCalendrier }, { status: 400 });
+  }
+
   try {
     const result = await executerSimulationPlanning(
       periode.dateDebut,
       periode.dateFin,
+      ligneId,
     );
 
     return NextResponse.json(result);

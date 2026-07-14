@@ -13,6 +13,7 @@ import {
 
 type AdminCampagnesPanelProps = {
   lignes: CampagneLigneRow[];
+  campagnesArchivees: CampagneLigneRow[];
   lignesOptions: LigneCampagneOption[];
 };
 
@@ -20,6 +21,7 @@ type FormState = {
   ligneId: string;
   periodeDebut: string;
   periodeFin: string;
+  dateLimiteSaisieDispos: string;
   dateGenerationPrevue: string;
 };
 
@@ -27,6 +29,7 @@ const emptyForm = (lignesOptions: LigneCampagneOption[]): FormState => ({
   ligneId: lignesOptions[0]?.id ?? "",
   periodeDebut: "",
   periodeFin: "",
+  dateLimiteSaisieDispos: "",
   dateGenerationPrevue: "",
 });
 
@@ -39,17 +42,24 @@ function formatDateFr(date: string): string {
   }).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
+function flattenCampagnes(lignes: CampagneLigneRow[]): CampagneItem[] {
+  return lignes.flatMap((ligne) => ligne.campagnes);
+}
+
 export function AdminCampagnesPanel({
   lignes: initialLignes,
+  campagnesArchivees: initialArchivees,
   lignesOptions,
 }: AdminCampagnesPanelProps) {
   const router = useRouter();
   const [lignes, setLignes] = useState(initialLignes);
+  const [campagnesArchivees, setCampagnesArchivees] = useState(initialArchivees);
   const [form, setForm] = useState<FormState>(emptyForm(lignesOptions));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -69,6 +79,7 @@ export function AdminCampagnesPanel({
       ligneId: campagne.ligneId,
       periodeDebut: campagne.periodeDebut,
       periodeFin: campagne.periodeFin,
+      dateLimiteSaisieDispos: campagne.dateLimiteSaisieDispos,
       dateGenerationPrevue: campagne.dateGenerationPrevue,
     });
     setError(null);
@@ -79,11 +90,100 @@ export function AdminCampagnesPanel({
     const response = await fetch("/api/admin/campagnes");
     const data = await response.json();
 
-    if (response.ok && Array.isArray(data.lignes)) {
-      setLignes(data.lignes);
+    if (response.ok) {
+      if (Array.isArray(data.lignes)) {
+        setLignes(data.lignes);
+      }
+      if (Array.isArray(data.campagnesArchivees)) {
+        setCampagnesArchivees(data.campagnesArchivees);
+      }
     }
 
     router.refresh();
+  }
+
+  async function handleArchive(campagne: CampagneItem) {
+    const confirmed = window.confirm(
+      `Archiver la campagne ${campagne.ligneNom} (${formatDateFr(campagne.periodeDebut)} — ${formatDateFr(campagne.periodeFin)}) ?\n\nElle sera retirée du tableau principal mais restera consultable dans les campagnes archivées.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setArchivingId(campagne.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/campagnes/${campagne.id}/archiver`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archivee: true }),
+        },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(
+          typeof data.error === "string"
+            ? data.error
+            : "Impossible d'archiver la campagne.",
+        );
+        return;
+      }
+
+      setMessage("Campagne archivée.");
+      await refreshData();
+    } catch {
+      setError("Impossible de contacter le serveur.");
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  async function handleUnarchive(campagne: CampagneItem) {
+    const confirmed = window.confirm(
+      `Désarchiver la campagne ${campagne.ligneNom} (${formatDateFr(campagne.periodeDebut)} — ${formatDateFr(campagne.periodeFin)}) ?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setArchivingId(campagne.id);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/admin/campagnes/${campagne.id}/archiver`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ archivee: false }),
+        },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(
+          typeof data.error === "string"
+            ? data.error
+            : "Impossible de désarchiver la campagne.",
+        );
+        return;
+      }
+
+      setMessage("Campagne désarchivée.");
+      await refreshData();
+    } catch {
+      setError("Impossible de contacter le serveur.");
+    } finally {
+      setArchivingId(null);
+    }
   }
 
   async function handleConfirm(campagne: CampagneItem) {
@@ -214,10 +314,8 @@ export function AdminCampagnesPanel({
     }
   }
 
-  const totalCampagnes = lignes.reduce(
-    (count, ligne) => count + ligne.campagnes.length,
-    0,
-  );
+  const campagnesActives = flattenCampagnes(lignes);
+  const campagnesArchiveesList = flattenCampagnes(campagnesArchivees);
 
   return (
     <div className="space-y-8">
@@ -227,118 +325,37 @@ export function AdminCampagnesPanel({
         s&apos;en écarter librement.
       </p>
 
-      <section className="overflow-x-auto rounded border border-zinc-200">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs text-zinc-600">
-              <th className="px-4 py-3 font-medium">Ligne</th>
-              <th className="px-4 py-3 font-medium">Priorité recommandée</th>
-              <th className="px-4 py-3 font-medium">Période couverte</th>
-              <th className="px-4 py-3 font-medium">Génération prévue</th>
-              <th className="px-4 py-3 font-medium">Statut</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100">
-            {lignes.map((ligne) =>
-              ligne.campagnes.length === 0 ? (
-                <tr key={ligne.ligneId}>
-                  <td className="px-4 py-3 font-medium">{ligne.ligneNom}</td>
-                  <td className="px-4 py-3 text-zinc-500">{ligne.ordrePriorite}</td>
-                  <td
-                    colSpan={4}
-                    className="px-4 py-3 text-zinc-500 italic"
-                  >
-                    Aucune campagne à venir ou en cours
-                  </td>
-                </tr>
-              ) : (
-                ligne.campagnes.map((campagne, index) => (
-                  <tr key={campagne.id}>
-                    {index === 0 ? (
-                      <>
-                        <td
-                          className="px-4 py-3 font-medium"
-                          rowSpan={ligne.campagnes.length}
-                        >
-                          {ligne.ligneNom}
-                        </td>
-                        <td
-                          className="px-4 py-3 text-zinc-500"
-                          rowSpan={ligne.campagnes.length}
-                        >
-                          {ligne.ordrePriorite}
-                        </td>
-                      </>
-                    ) : null}
-                    <td className="px-4 py-3">
-                      {formatDateFr(campagne.periodeDebut)} —{" "}
-                      {formatDateFr(campagne.periodeFin)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatDateFr(campagne.dateGenerationPrevue)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatutBadge statut={campagne.statut} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        {campagne.publiable ? (
-                          <button
-                            type="button"
-                            onClick={() => handlePublish(campagne)}
-                            disabled={publishingId === campagne.id}
-                            className="rounded bg-blue-700 px-2 py-1 text-xs text-white hover:bg-blue-800 disabled:opacity-50"
-                          >
-                            {publishingId === campagne.id
-                              ? "Publication…"
-                              : `Publier (${campagne.nonPublieesCount})`}
-                          </button>
-                        ) : null}
-                        {campagne.confirmable ? (
-                          <button
-                            type="button"
-                            onClick={() => handleConfirm(campagne)}
-                            disabled={confirmingId === campagne.id}
-                            className="rounded bg-green-700 px-2 py-1 text-xs text-white hover:bg-green-800 disabled:opacity-50"
-                          >
-                            {confirmingId === campagne.id
-                              ? "Confirmation…"
-                              : "Confirmer cette campagne"}
-                          </button>
-                        ) : null}
-                        {campagne.modifiable ? (
-                          <button
-                            type="button"
-                            onClick={() => startEdit(campagne)}
-                            className="text-blue-700 hover:underline"
-                          >
-                            Modifier
-                          </button>
-                        ) : campagne.statut === "CONFIRMEE" ? (
-                          <span className="text-xs text-zinc-400">Verrouillée</span>
-                        ) : (
-                          <span
-                            className="text-xs text-zinc-400"
-                            title="Des astreintes doivent être enregistrées sur la période"
-                          >
-                            Non confirmable
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ),
-            )}
-          </tbody>
-        </table>
-        {totalCampagnes === 0 ? (
-          <p className="border-t border-zinc-100 px-4 py-3 text-sm text-zinc-500">
-            Aucune campagne planifiée pour le moment.
-          </p>
-        ) : null}
-      </section>
+      <CampagnesTable
+        campagnes={campagnesActives}
+        archivingId={archivingId}
+        confirmingId={confirmingId}
+        publishingId={publishingId}
+        onConfirm={handleConfirm}
+        onPublish={handlePublish}
+        onEdit={startEdit}
+        onArchive={handleArchive}
+        emptyMessage="Aucune campagne active pour le moment."
+      />
+
+      <details className="rounded border border-zinc-200 bg-zinc-50">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-zinc-800">
+          Campagnes archivées
+          {campagnesArchiveesList.length > 0 ? (
+            <span className="ml-2 font-normal text-zinc-500">
+              ({campagnesArchiveesList.length})
+            </span>
+          ) : null}
+        </summary>
+        <div className="border-t border-zinc-200 bg-white">
+          <CampagnesTable
+            campagnes={campagnesArchiveesList}
+            archivingId={archivingId}
+            archived
+            onUnarchive={handleUnarchive}
+            emptyMessage="Aucune campagne archivée."
+          />
+        </div>
+      </details>
 
       <section className="rounded border border-zinc-200 p-4">
         <h2 className="text-sm font-semibold">
@@ -404,11 +421,34 @@ export function AdminCampagnesPanel({
 
           <label className="block text-sm">
             <span className="mb-1 block font-medium">
+              Date limite de saisie des disponibilités
+            </span>
+            <input
+              type="date"
+              value={form.dateLimiteSaisieDispos}
+              max={form.dateGenerationPrevue || undefined}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  dateLimiteSaisieDispos: event.target.value,
+                }))
+              }
+              className="w-full rounded border border-zinc-300 px-3 py-2"
+              required
+            />
+            <span className="mt-1 block text-xs text-zinc-500">
+              Doit être antérieure ou égale à la date de génération prévue.
+            </span>
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">
               Date de génération prévue
             </span>
             <input
               type="date"
               value={form.dateGenerationPrevue}
+              min={form.dateLimiteSaisieDispos || undefined}
               onChange={(event) =>
                 setForm((current) => ({
                   ...current,
@@ -455,6 +495,146 @@ export function AdminCampagnesPanel({
           </p>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+type CampagnesTableProps = {
+  campagnes: CampagneItem[];
+  archivingId?: string | null;
+  confirmingId?: string | null;
+  publishingId?: string | null;
+  archived?: boolean;
+  onConfirm?: (campagne: CampagneItem) => void;
+  onPublish?: (campagne: CampagneItem) => void;
+  onEdit?: (campagne: CampagneItem) => void;
+  onArchive?: (campagne: CampagneItem) => void;
+  onUnarchive?: (campagne: CampagneItem) => void;
+  emptyMessage: string;
+};
+
+function CampagnesTable({
+  campagnes,
+  archivingId,
+  confirmingId,
+  publishingId,
+  archived = false,
+  onConfirm,
+  onPublish,
+  onEdit,
+  onArchive,
+  onUnarchive,
+  emptyMessage,
+}: CampagnesTableProps) {
+  if (campagnes.length === 0) {
+    return (
+      <p className="px-4 py-3 text-sm text-zinc-500 italic">{emptyMessage}</p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs text-zinc-600">
+            <th className="px-4 py-3 font-medium">Ligne</th>
+            <th className="px-4 py-3 font-medium">Période couverte</th>
+            <th className="px-4 py-3 font-medium">Limite saisie dispos.</th>
+            <th className="px-4 py-3 font-medium">Génération prévue</th>
+            <th className="px-4 py-3 font-medium">Statut</th>
+            {archived ? (
+              <th className="px-4 py-3 font-medium">Archivée le</th>
+            ) : null}
+            <th className="px-4 py-3 font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-100">
+          {campagnes.map((campagne) => (
+            <tr key={campagne.id}>
+              <td className="px-4 py-3 font-medium">{campagne.ligneNom}</td>
+              <td className="px-4 py-3">
+                {formatDateFr(campagne.periodeDebut)} —{" "}
+                {formatDateFr(campagne.periodeFin)}
+              </td>
+              <td className="px-4 py-3">
+                {formatDateFr(campagne.dateLimiteSaisieDispos)}
+              </td>
+              <td className="px-4 py-3">
+                {formatDateFr(campagne.dateGenerationPrevue)}
+              </td>
+              <td className="px-4 py-3">
+                <StatutBadge statut={campagne.statut} />
+              </td>
+              {archived ? (
+                <td className="px-4 py-3 text-zinc-600">
+                  {campagne.dateArchivage
+                    ? formatDateFr(campagne.dateArchivage)
+                    : "—"}
+                </td>
+              ) : null}
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {!archived && onPublish && campagne.publiable ? (
+                    <button
+                      type="button"
+                      onClick={() => onPublish(campagne)}
+                      disabled={publishingId === campagne.id}
+                      className="rounded bg-blue-700 px-2 py-1 text-xs text-white hover:bg-blue-800 disabled:opacity-50"
+                    >
+                      {publishingId === campagne.id
+                        ? "Publication…"
+                        : `Publier (${campagne.nonPublieesCount})`}
+                    </button>
+                  ) : null}
+                  {!archived && onConfirm && campagne.confirmable ? (
+                    <button
+                      type="button"
+                      onClick={() => onConfirm(campagne)}
+                      disabled={confirmingId === campagne.id}
+                      className="rounded bg-green-700 px-2 py-1 text-xs text-white hover:bg-green-800 disabled:opacity-50"
+                    >
+                      {confirmingId === campagne.id
+                        ? "Confirmation…"
+                        : "Confirmer"}
+                    </button>
+                  ) : null}
+                  {!archived && onEdit && campagne.modifiable ? (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(campagne)}
+                      className="text-xs text-blue-700 hover:underline"
+                    >
+                      Modifier
+                    </button>
+                  ) : null}
+                  {!archived && onArchive ? (
+                    <button
+                      type="button"
+                      onClick={() => onArchive(campagne)}
+                      disabled={archivingId === campagne.id}
+                      className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    >
+                      {archivingId === campagne.id ? "Archivage…" : "Archiver"}
+                    </button>
+                  ) : null}
+                  {archived && onUnarchive ? (
+                    <button
+                      type="button"
+                      onClick={() => onUnarchive(campagne)}
+                      disabled={archivingId === campagne.id}
+                      className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
+                    >
+                      {archivingId === campagne.id
+                        ? "Désarchivage…"
+                        : "Désarchiver"}
+                    </button>
+                  ) : null}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

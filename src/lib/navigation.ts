@@ -34,10 +34,11 @@ export const planningNavChildren: NavItem[] = [
   { href: "/planning", label: "Planning collectif" },
   { href: "/admin/planning", label: "Gestion du planning" },
   {
-    href: "/admin/generation-automatique",
-    label: "Génération auto (du planning)",
+    href: "/admin/affectation-astreintes",
+    label: "Affectation des astreintes",
   },
   { href: "/admin/campagnes", label: "Campagnes de planification" },
+  { href: "/admin/a-pourvoir", label: "Créneaux à pourvoir" },
   { href: "/admin/disponibilites", label: "Disponibilités" },
 ];
 

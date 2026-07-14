@@ -20,6 +20,7 @@ import {
   type PointsProjectesIade,
 } from "@/server/points";
 import { journaliser } from "@/server/audit";
+import { getErreurDateDebutCalendrierPublie } from "@/server/calendrier-publie";
 
 export type PointsSimulesIade = PointsProjectesIade;
 
@@ -207,10 +208,11 @@ function collectAnneesPeriode(debut: Date, fin: Date): number[] {
 export async function executerSimulationPlanning(
   dateDebut: Date,
   dateFin: Date,
+  ligneId?: string,
 ): Promise<SimulationPlanningResult> {
   const debut = normalizeUtcDay(dateDebut);
   const fin = normalizeUtcDay(dateFin);
-  const resultat = await genererPlanningAutomatique(debut, fin);
+  const resultat = await genererPlanningAutomatique(debut, fin, ligneId);
   const propositions = resultat.propositions;
   const annees = collectAnneesPeriode(debut, fin);
   const joursPeriode: Date[] = [];
@@ -226,11 +228,17 @@ export async function executerSimulationPlanning(
   >;
 
   const [lignes, pointsApresSimulation] = await Promise.all([
-    prisma.ligneAstreinte.findMany({
-      where: { actif: true },
-      orderBy: [{ ordrePriorite: "asc" }, { nom: "asc" }],
-      select: { id: true, nom: true },
-    }),
+    ligneId
+      ? prisma.ligneAstreinte.findMany({
+          where: { id: ligneId, actif: true },
+          orderBy: [{ ordrePriorite: "asc" }, { nom: "asc" }],
+          select: { id: true, nom: true },
+        })
+      : prisma.ligneAstreinte.findMany({
+          where: { actif: true },
+          orderBy: [{ ordrePriorite: "asc" }, { nom: "asc" }],
+          select: { id: true, nom: true },
+        }),
     calculerPointsApresSimulation(annees, propositions),
   ]);
 
@@ -262,6 +270,23 @@ export async function validerSimulationPlanning(
       proposition.iadeId && !proposition.nonPourvu && !proposition.dejaPlanifie,
   );
   const errors: ValidationSimulationError[] = [];
+
+  if (aCreer.length > 0) {
+    const dateMinProposition = aCreer.reduce((min, proposition) =>
+      proposition.date < min ? proposition.date : min,
+    aCreer[0]!.date);
+    const dateMin = parseDateInput(dateMinProposition);
+    if (dateMin) {
+      const erreurCalendrier = await getErreurDateDebutCalendrierPublie(dateMin);
+      if (erreurCalendrier) {
+        return {
+          success: false,
+          errors: [{ date: "—", ligneNom: "—", message: erreurCalendrier }],
+        };
+      }
+    }
+  }
+
   const slotsParLigneDate = new Map<string, TypeCreneau[]>();
   const creneauxIadeParJour = new Map<string, TypeCreneau[]>();
 

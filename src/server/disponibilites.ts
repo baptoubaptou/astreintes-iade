@@ -20,6 +20,11 @@ import {
   determinerTypeJour,
   type TypeJour,
 } from "@/server/jours-feries";
+import type { FenetreCampagneSaisie } from "@/server/campagne-saisie-dispos";
+import {
+  assertSaisieDisposOuverte,
+  getFenetresCampagnesPourMois,
+} from "@/server/campagne-saisie-dispos";
 
 export const TYPES_DISPONIBILITE: TypeCreneau[] = [
   TypeCreneau.NUIT_SEMAINE,
@@ -81,6 +86,7 @@ export type MesDisponibilitesMoisData = {
     type: TypePreferenceContinuite;
   }>;
   typesJourParDate: Record<string, TypeJour>;
+  fenetresCampagnes: FenetreCampagneSaisie[];
 };
 
 export type DupliquerLignesPreview = {
@@ -216,6 +222,14 @@ export async function assertIadeQualifieSurLigne(
   return null;
 }
 
+export async function isIadeQualifieSurLigne(
+  iadeId: string,
+  ligneId: string,
+): Promise<boolean> {
+  const erreur = await assertIadeQualifieSurLigne(iadeId, ligneId);
+  return erreur === null;
+}
+
 export async function isIadeDisponibleSurCreneau(
   iadeId: string,
   ligneId: string,
@@ -325,7 +339,7 @@ export async function getMesDisponibilitesMoisData(options: {
   const { year, month, value } = parseMoisParam(options.mois);
   const { start, end } = getMonthUtcRange(year, month);
 
-  const [lignesQualifiees, disponibilites, preferencesContinuite] =
+  const [lignesQualifiees, disponibilites, preferencesContinuite, fenetresCampagnes] =
     await Promise.all([
       getLignesQualifiees(options.iadeId),
       listDisponibilites({ iadeId: options.iadeId, mois: value }),
@@ -336,6 +350,7 @@ export async function getMesDisponibilitesMoisData(options: {
         },
         orderBy: [{ dateDebut: "asc" }, { ligneId: "asc" }],
       }),
+      getFenetresCampagnesPourMois(options.iadeId, value),
     ]);
 
   const joursPeriode = eachDayUtc(start, end);
@@ -356,6 +371,7 @@ export async function getMesDisponibilitesMoisData(options: {
       type: preference.type,
     })),
     typesJourParDate,
+    fenetresCampagnes,
   };
 }
 
@@ -373,6 +389,11 @@ export async function createDisponibilite(
   }
 
   const date = parseDateInput(input.date)!;
+  const verrouError = await assertSaisieDisposOuverte(input.ligneId, date);
+  if (verrouError) {
+    return verrouError;
+  }
+
   const today = startOfTodayUtc();
   if (date < today) {
     return { error: "Impossible de déclarer une disponibilité dans le passé." };
@@ -586,6 +607,14 @@ export async function deleteDisponibilite(
 
   if (record.iadeId !== requesterId) {
     return { error: "Accès refusé.", status: 403 };
+  }
+
+  const verrouError = await assertSaisieDisposOuverte(
+    record.ligneId,
+    record.date,
+  );
+  if (verrouError) {
+    return { error: verrouError.error, status: 400 };
   }
 
   const today = startOfTodayUtc();

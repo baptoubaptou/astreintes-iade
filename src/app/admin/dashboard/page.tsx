@@ -20,9 +20,9 @@ export default async function AdminDashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DashboardLink
-          href="/admin/generation-automatique"
-          title="Génération automatique"
-          description="Simuler et valider un planning sur une période."
+          href="/admin/affectation-astreintes"
+          title="Affectation des astreintes"
+          description="Simuler et valider un planning (tout en même temps ou par ligne)."
         />
         <DashboardLink
           href="/admin/planning"

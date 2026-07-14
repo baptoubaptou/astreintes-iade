@@ -774,9 +774,33 @@ async function traiterJour(
   await traiterCreneauxIndependants(ctx, jour, ligne, creneaux);
 }
 
+async function chargerLignesPourGeneration(ligneId?: string): Promise<
+  Array<{ id: string; nom: string; ordrePriorite: number }>
+> {
+  if (ligneId) {
+    const ligne = await prisma.ligneAstreinte.findFirst({
+      where: { id: ligneId, actif: true },
+      select: { id: true, nom: true, ordrePriorite: true },
+    });
+
+    if (!ligne) {
+      throw new Error(`Ligne introuvable ou inactive : ${ligneId}`);
+    }
+
+    return [ligne];
+  }
+
+  return prisma.ligneAstreinte.findMany({
+    where: { actif: true },
+    orderBy: [{ ordrePriorite: "asc" }, { nom: "asc" }],
+    select: { id: true, nom: true, ordrePriorite: true },
+  });
+}
+
 async function genererPlanningGlouton(
   dateDebut: Date,
   dateFin: Date,
+  ligneId?: string,
 ): Promise<PropositionAffectation[]> {
   const debut = normalizeUtcDay(dateDebut);
   const fin = normalizeUtcDay(dateFin);
@@ -794,13 +818,10 @@ async function genererPlanningGlouton(
     astreintesExistantes,
     preferencesContinuite,
   ] = await Promise.all([
-    prisma.ligneAstreinte.findMany({
-      where: { actif: true },
-      orderBy: [{ ordrePriorite: "asc" }, { nom: "asc" }],
-      select: { id: true, nom: true, ordrePriorite: true },
-    }),
+    chargerLignesPourGeneration(ligneId),
     prisma.qualification.findMany({
       where: {
+        ...(ligneId ? { ligneId } : {}),
         ligne: { actif: true },
         iade: { role: Role.IADE, actif: true },
       },
@@ -811,6 +832,7 @@ async function genererPlanningGlouton(
     prisma.disponibilite.findMany({
       where: {
         date: { gte: debut, lte: fin },
+        ...(ligneId ? { ligneId } : {}),
         iade: { role: Role.IADE, actif: true },
       },
       select: {
@@ -837,6 +859,7 @@ async function genererPlanningGlouton(
     prisma.preferenceContinuite.findMany({
       where: {
         dateDebut: { gte: debut, lte: fin },
+        ...(ligneId ? { ligneId } : {}),
         iade: { role: Role.IADE, actif: true },
         ligne: { actif: true },
       },
@@ -959,9 +982,14 @@ async function genererPlanningGlouton(
 export async function genererPlanningAutomatique(
   dateDebut: Date,
   dateFin: Date,
+  ligneId?: string,
 ): Promise<ResultatGenererPlanningAutomatique> {
   const modeAttribution = await getModeAttribution();
-  const propositionsGlouton = await genererPlanningGlouton(dateDebut, dateFin);
+  const propositionsGlouton = await genererPlanningGlouton(
+    dateDebut,
+    dateFin,
+    ligneId,
+  );
 
   if (modeAttribution !== ModeAttribution.LISSE) {
     return {

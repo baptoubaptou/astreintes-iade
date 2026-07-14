@@ -7,7 +7,7 @@ type PlanningSimulationPanelProps = {
 export function PlanningSimulationPanel({ mois }: PlanningSimulationPanelProps) {
   return (
     <section className="rounded border border-dashed border-zinc-300 bg-zinc-50 p-4">
-      <h2 className="text-lg font-medium">Génération automatique (simulation)</h2>
+      <h2 className="text-lg font-medium">Affectation des astreintes</h2>
       <p className="mt-2 text-sm text-zinc-600">
         Conformément au cahier des charges, l&apos;algorithme d&apos;attribution
         fonctionne en mode <strong>aperçu obligatoire</strong> avant tout
@@ -26,10 +26,10 @@ export function PlanningSimulationPanel({ mois }: PlanningSimulationPanelProps) 
         </li>
       </ol>
       <Link
-        href="/admin/generation-automatique"
+        href="/admin/affectation-astreintes"
         className="mt-4 inline-block rounded border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-white"
       >
-        Ouvrir la génération automatique
+        Ouvrir l&apos;affectation des astreintes
       </Link>
       <p className="mt-2 text-xs text-zinc-500">
         Vue planning actuelle : {mois}

@@ -7,7 +7,7 @@ import {
 import { formatLigneCellComplet } from "@/server/points-export-format";
 
 const MARGIN = 40;
-const ROW_HEIGHT = 28;
+const ROW_HEIGHT = 18;
 const HEADER_HEIGHT = 22;
 
 function formatDateGeneration(date: Date): string {
@@ -58,7 +58,7 @@ function drawHeaderRow(
   doc.font("Helvetica-Bold").fontSize(8);
 
   let offset = x;
-  doc.text("IADE", offset, y, { width: widths.iade });
+  doc.text("Nom", offset, y, { width: widths.iade });
   offset += widths.iade;
   doc.text("Points cumulés", offset, y, { width: widths.total });
   offset += widths.total;
@@ -98,7 +98,6 @@ function drawDataRow(
   for (const ligne of parLigne) {
     doc.text(formatLigneCellComplet(ligne), offset, y, {
       width: widths.ligne,
-      lineGap: 1,
     });
     offset += widths.ligne;
   }

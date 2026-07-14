@@ -7,6 +7,7 @@ import {
 } from "@/server/audit-resumes";
 import { parseDateInput, parseMoisParam } from "@/server/astreintes";
 import { assertIadeQualifieSurLigne } from "@/server/disponibilites";
+import { assertSaisieDisposOuverte } from "@/server/campagne-saisie-dispos";
 import {
   creneauxDisponiblesPour,
   determinerTypeJour,
@@ -170,6 +171,11 @@ export async function createPreferenceContinuite(
   }
 
   const date = parseDateInput(input.dateDebut)!;
+  const verrouError = await assertSaisieDisposOuverte(input.ligneId, date);
+  if (verrouError) {
+    return verrouError;
+  }
+
   const today = startOfTodayUtc();
   if (date < today) {
     return {
@@ -288,6 +294,14 @@ export async function deletePreferenceContinuite(
 
   if (record.iadeId !== requesterId) {
     return { error: "Accès refusé.", status: 403 };
+  }
+
+  const verrouError = await assertSaisieDisposOuverte(
+    record.ligneId,
+    record.dateDebut,
+  );
+  if (verrouError) {
+    return { error: verrouError.error, status: 400 };
   }
 
   const today = startOfTodayUtc();

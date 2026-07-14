@@ -8,6 +8,10 @@ import { shiftMois } from "@/server/astreintes";
 import {
   creneauxDisponiblesPour,
 } from "@/server/jours-feries";
+import {
+  estSaisieDisposVerrouillee,
+  listerMessagesVerrouillageMois,
+} from "@/server/campagne-saisie-dispos";
 import type {
   DisponibiliteItem,
   LigneQualifiee,
@@ -184,13 +188,38 @@ export function MesDisponibilitesCalendar({
     return date < today;
   }
 
+  function isVerrouille(date: string, ligneId: string): boolean {
+    return (
+      estSaisieDisposVerrouillee(
+        date,
+        ligneId,
+        data.fenetresCampagnes,
+        today,
+      ) !== null
+    );
+  }
+
+  const messagesVerrouillage = useMemo(() => {
+    return listerMessagesVerrouillageMois(data.fenetresCampagnes, mois, today);
+  }, [data.fenetresCampagnes, mois, today]);
+
+  const messagesVerrouillageVisibles = useMemo(() => {
+    if (viewMode === "ligne") {
+      return messagesVerrouillage.filter(
+        (entry) => entry.ligneId === activeLigneId,
+      );
+    }
+
+    return messagesVerrouillage;
+  }, [messagesVerrouillage, viewMode, activeLigneId]);
+
   async function toggleDisponibilite(
     date: string,
     ligneId: string,
     typeCreneau: TypeCreneau,
     checked: boolean,
   ) {
-    if (isPast(date)) {
+    if (isPast(date) || isVerrouille(date, ligneId)) {
       return;
     }
 
@@ -268,7 +297,7 @@ export function MesDisponibilitesCalendar({
     type: TypePreferenceContinuite,
     checked: boolean,
   ) {
-    if (isPast(date)) {
+    if (isPast(date) || isVerrouille(date, ligneId)) {
       return;
     }
 
@@ -452,16 +481,23 @@ export function MesDisponibilitesCalendar({
     const date = dateKey(day);
     const typeJour = data.typesJourParDate[date] ?? "SEMAINE";
     const creneaux = creneauxDisponiblesPour(typeJour);
-    const disabled = isPast(date) || isLoading;
 
     return (
       <div className={`space-y-1 ${compact ? "text-[11px]" : "text-xs"}`}>
         {lignes.map((ligne) => {
+          const verrouille = isVerrouille(date, ligne.id);
+          const disabled = isPast(date) || isLoading || verrouille;
+
           if (typeJour === "SEMAINE") {
             const creneau = creneaux[0];
             const checked = isChecked(date, ligne.id, creneau);
             return (
-              <label key={ligne.id} className="flex items-center gap-1">
+              <label
+                key={ligne.id}
+                className={`flex items-center gap-1 ${
+                  verrouille ? "cursor-not-allowed text-zinc-400" : ""
+                }`}
+              >
                 <input
                   type="checkbox"
                   checked={checked}
@@ -492,7 +528,14 @@ export function MesDisponibilitesCalendar({
           );
 
           return (
-            <div key={ligne.id} className="rounded border border-zinc-100 p-1">
+            <div
+              key={ligne.id}
+              className={`rounded border p-1 ${
+                verrouille
+                  ? "border-zinc-200 bg-zinc-100 text-zinc-400"
+                  : "border-zinc-100"
+              }`}
+            >
               <p className="font-medium">{ligne.nom}</p>
               <label className="flex items-center gap-1">
                 <input
@@ -527,7 +570,11 @@ export function MesDisponibilitesCalendar({
                 <span>{libelleCreneau(creneauNuit)}</span>
               </label>
               {jourChecked && nuitChecked ? (
-                <label className="mt-1 flex items-center gap-1 text-violet-800">
+                <label
+                  className={`mt-1 flex items-center gap-1 ${
+                    verrouille ? "text-zinc-400" : "text-violet-800"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={jourNuitChecked}
@@ -593,7 +640,10 @@ export function MesDisponibilitesCalendar({
           <div className="flex flex-wrap gap-4">
             {eligible.map((ligne) => {
               const checked = isPrefChecked(satKey, ligne.id, "WEEKEND_48H");
-              const disabled = isPast(satKey) || isLoading;
+              const verrouille =
+                isVerrouille(satKey, ligne.id) ||
+                isVerrouille(sunKey, ligne.id);
+              const disabled = isPast(satKey) || isLoading || verrouille;
               return (
                 <label
                   key={ligne.id}
@@ -761,6 +811,16 @@ export function MesDisponibilitesCalendar({
           </button>
         ) : null}
       </section>
+
+      {messagesVerrouillageVisibles.map((entry) => (
+        <p
+          key={entry.ligneId}
+          className="rounded border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
+          role="status"
+        >
+          {entry.message}
+        </p>
+      ))}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse text-sm">
