@@ -88,7 +88,15 @@ export function validateUpdateUtilisateurInput(
 export function validateCreateUtilisateurInput(
   input: Record<string, unknown>,
 ): UpdateUtilisateurInput | UtilisateurValidationError {
-  return validateUpdateUtilisateurInput(input);
+  const base = validateUpdateUtilisateurInput({
+    ...input,
+    role:
+      input.role === Role.CADRE || input.role === "CADRE"
+        ? Role.CADRE
+        : Role.IADE,
+  });
+
+  return base;
 }
 
 export async function createUtilisateur(

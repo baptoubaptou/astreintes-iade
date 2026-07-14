@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Role } from "@prisma/client";
 import { assertCadreApi } from "@/server/assert-cadre-api";
 import {
   createUtilisateur,
@@ -41,10 +40,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const role = body.role === Role.CADRE ? Role.CADRE : Role.IADE;
-
   try {
-    const utilisateur = await createUtilisateur(validated, role);
+    const utilisateur = await createUtilisateur(validated, validated.role);
     return NextResponse.json(utilisateur, { status: 201 });
   } catch (error) {
     const mapped = mapUtilisateurPrismaError(error);
