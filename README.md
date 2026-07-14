@@ -211,13 +211,14 @@ Le service `caddy` est inclus dans le `docker-compose.yml` principal. Le connect
    | Credentials du tunnel | `cloudflare/credentials/<TUNNEL_ID>.json` |
 
 5. **Configurer le `config.yml`**  
-   Remplacer les placeholders `<TUNNEL_ID>` et `<DOMAIN>` (ex. `astreintes.baptou.me`). Le service cible doit rester `http://caddy:80`.
+   Remplacer les placeholders `<TUNNEL_ID>` et `<DOMAIN>` (ex. `iade.baptou.me`). Le service cible doit rester `http://caddy:80`.
 
 6. **Configurer l'application**  
-   Dans `.env`, définir l'URL publique pour Auth.js :
+   Dans `.env`, définir l'URL publique pour Auth.js (**une seule ligne**, identique au domaine du navigateur) :
 
    ```bash
-   AUTH_URL="https://astreintes.baptou.me"
+   AUTH_URL="https://iade.baptou.me"
+   AUTH_TRUST_HOST="true"
    ```
 
 7. **Démarrer la stack de base** (application + Caddy, sans tunnel) :
@@ -236,7 +237,7 @@ Le service `caddy` est inclus dans le `docker-compose.yml` principal. Le connect
 
 Une fois le tunnel actif et le DNS configuré dans Cloudflare, les utilisateurs accèdent à l'application à l'adresse :
 
-**https://astreintes.baptou.me**
+**https://iade.baptou.me** (ou le sous-domaine configuré dans Cloudflare)
 
 Aucun VPN, Tailscale ou logiciel client n'est requis : le trafic transite par Cloudflare (HTTPS terminé côté Cloudflare) jusqu'au Raspberry Pi via le tunnel chiffré.
 

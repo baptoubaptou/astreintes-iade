@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { signOut } from "@/auth";
 
 export function SignOutButton() {
@@ -5,7 +6,9 @@ export function SignOutButton() {
     <form
       action={async () => {
         "use server";
-        await signOut({ redirectTo: "/login" });
+        // Évite qu'Auth.js reconstruise l'URL avec AUTH_URL (autre sous-domaine derrière Cloudflare).
+        await signOut({ redirect: false });
+        redirect("/login");
       }}
     >
       <button
