@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     "Application de gestion des astreintes IADE au bloc opératoire",
 };
 
+// App connectée à SQLite : pas de pré-rendu statique au build (évite les erreurs Prisma en CI/Docker).
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{

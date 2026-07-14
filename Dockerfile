@@ -15,9 +15,11 @@ RUN npm ci
 
 FROM deps AS build
 COPY . .
-ENV DATABASE_URL="file:./dev.db"
-RUN npx prisma generate
-RUN npm run build
+# Base éphémère pour le build : Next.js pré-rend certaines pages qui interrogent Prisma.
+ENV DATABASE_URL="file:./build.db"
+RUN npx prisma generate \
+  && npx prisma migrate deploy \
+  && npm run build
 
 FROM base AS runtime
 ENV NODE_ENV=production
